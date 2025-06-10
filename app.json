@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "MenuMitra Partner App",
+    "slug": "menumitra-partner-app",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/menumitra-logo.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.menumitra.partnerapp",
+      "versionCode": 5,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/menumitra-logo.png",
+        "backgroundColor": "#FFFFFF",
+        "monochromeImage": "./assets/menumitra-logo.png"
+      },
+      "permissions": [
+        "NOTIFICATIONS",
+        "VIBRATE"
+      ]
+      
+    },
+    "web": {
+      "favicon": "./assets/menumitra-logo.png",
+      "backgroundColor": "#ffffff"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b39a1408-cf45-49ed-8d97-39827b4d7451"
+      },
+      "updateChannel": "preview"
+    },
+    "owner": "menumitra",
+    "splash": {
+      "image": "./assets/menumitra-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff",
+      "hideExponentText": true
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/menumitra-logo.png",
+          "color": "#ffffff",
+          "sounds": ["./assets/sounds/notification.wav"],
+          "mode": "production"
+        }
+      ]
+    ],
+    "notification": {
+      "icon": "./assets/menumitra-logo.png",
+      "color": "#ffffff",
+      "androidMode": "default",
+      "androidCollapsedTitle": "New Notification",
+      "iosDisplayInForeground": true,
+      "androidNotificationSound": "./assets/sounds/notification.wav",
+      "iosNotificationSound": "./assets/sounds/notification.wav"
+    },
+    "updates": {
+      "enabled": true,
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/b39a1408-cf45-49ed-8d97-39827b4d7451"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    }
+  }
+}
