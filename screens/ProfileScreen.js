@@ -338,6 +338,23 @@ export default function ProfileScreen({ navigation }) {
             label="Last Login"
             value={userData?.lastLogin || "-"}
           />
+          
+          <TouchableOpacity 
+            style={styles.storageViewButton} 
+            onPress={() => {
+              navigation.getParent()?.navigate('StorageViewer');
+            }}
+          >
+            <View style={styles.infoItem}>
+              <View style={styles.infoIcon}>
+                <FontAwesome name="database" size={20} color="#67B279" />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>View Storage Data</Text>
+                <Text style={styles.infoValue}>Check AsyncStorage contents</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.footer}>
@@ -571,5 +588,10 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 8,
+  },
+  storageViewButton: {
+    marginTop: 10,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
   },
 });

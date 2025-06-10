@@ -34,6 +34,7 @@ import * as Updates from 'expo-updates';
 import { checkForUpdates } from './services/updateService';
 import { setNavigator } from './services/axiosConfig';
 import { requestNotificationPermissions, configureNotifications } from './services/notificationService';
+import StorageViewerScreen from './screens/StorageViewerScreen';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -62,6 +63,7 @@ function MainStackNavigator() {
       <Stack.Screen name="Orders" component={Orders} />
       <Stack.Screen name="OrderDetails" component={OrderDetails} />
       <Stack.Screen name="Home" component={DashboardScreen} />
+      <Stack.Screen name="StorageViewer" component={StorageViewerScreen} />
     </Stack.Navigator>
   );
 }
@@ -158,6 +160,7 @@ export default function App() {
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="VerifyOTP" component={VerifyOTPScreen} />
           <Stack.Screen name="MainApp" component={DrawerNavigator} />
+          <Stack.Screen name="StorageViewer" component={StorageViewerScreen} />
         </Stack.Navigator>
       </NavigationContainer>
 
