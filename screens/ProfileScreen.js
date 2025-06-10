@@ -53,12 +53,12 @@ export default function ProfileScreen({ navigation }) {
         return;
       }
 
-      // Fetch updated profile data from API with device token
+      // Fetch updated profile data from API with new endpoint and payload
       const response = await axios.post(
-        `${COMMON_BASE_URL}/view_profile_detail`,
+        `${COMMON_BASE_URL}/view_profile`,
         {
           user_id: parsedData.user_id,
-          device_token: deviceToken
+          app_source: "partner"
         },
         {
           headers: {
@@ -69,9 +69,9 @@ export default function ProfileScreen({ navigation }) {
       );
 
       console.log('Full API Response:', JSON.stringify(response.data, null, 2));
-      if (response.data.st === 1) {
+      if (response.data.data) {
         // Map API response to match existing UI structure
-        const userDetails = response.data.Data?.user_details;
+        const userDetails = response.data.data?.user_details;
         console.log('User Details:', userDetails);
         if (userDetails) {
           const updatedUserData = {
