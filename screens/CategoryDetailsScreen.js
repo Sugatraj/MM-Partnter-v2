@@ -52,6 +52,7 @@ const formatDateTime = (dateTimeString) => {
 export default function CategoryDetailsScreen({ route, navigation }) {
   const { menu_cat_id, outlet_id } = route.params;
   const [category, setCategory] = useState(null);
+  const [menuList, setMenuList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,61 +85,84 @@ export default function CategoryDetailsScreen({ route, navigation }) {
       setError(null);
       const token = await AsyncStorage.getItem("accessToken");
       const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userDataStr = await AsyncStorage.getItem("userData");
+      const userData = JSON.parse(userDataStr);
+
+      if (!userData || !userData.user_id) {
+        throw new Error('User ID not found in stored data');
+      }
 
       const requestBody = {
         outlet_id: Number(outlet_id),
         menu_cat_id: Number(menu_cat_id),
-        device_token: deviceToken
+        device_token: deviceToken,
+        user_id: userData.user_id,
+        app_source: "partner"
       };
 
       console.log("📤 Request Body:", requestBody);
 
-      // Using fetch instead of axios
-      const response = await fetch(`${COMMON_BASE_URL}/menu_category_view`, {
-        method: "POST",
+      const response = await axios({
+        method: 'post',
+        url: `${COMMON_BASE_URL}/menu_category_view`,
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
           "Device-Token": deviceToken
         },
-        body: JSON.stringify(requestBody),
+        data: requestBody
       });
 
-      const responseData = await response.json();
-      console.log("📥 Response Data:", responseData);
+      console.log("📥 Response Data:", response.data);
 
       // Check for 401 unauthorized first
       if (response.status === 401 || 
-          responseData.code === 'token_not_valid' || 
-          (responseData.detail && responseData.detail.includes('token not valid'))) {
+          response.data.code === 'token_not_valid' || 
+          (response.data.detail && response.data.detail.includes('token not valid'))) {
         await handleUnauthorized();
         return;
       }
 
-      if (responseData.st === 1 && responseData.data) {
-        const categoryData = {
-          menu_cat_id: responseData.data.menu_cat_id,
-          name: responseData.data.name,
-          image: responseData.data.image,
-          outlet_id: responseData.data.outlet_id,
-          menu_count: responseData.data.menu_count || 0,
-          created_on: responseData.data.created_on || "-",
-          created_by: responseData.data.created_by || "-",
-          updated_on: responseData.data.updated_on || "-",
-          updated_by: responseData.data.updated_by || "-",
-          is_active: responseData.data.is_active || false,
-        };
-
-        setCategory(categoryData);
-        console.log("✅ Category Set:", categoryData);
-      } else {
-        throw new Error(responseData.Msg || "Failed to load category details");
+      // Check if response.data exists and has the data property
+      if (!response.data || !response.data.data) {
+        throw new Error(response.data?.Msg || "Invalid response format");
       }
+
+      const responseData = response.data.data;
+
+      // Validate required fields
+      if (!responseData.menu_cat_id || !responseData.name) {
+        throw new Error("Missing required category data");
+      }
+
+      const categoryData = {
+        menu_cat_id: responseData.menu_cat_id,
+        name: responseData.name,
+        image: responseData.image || null,
+        outlet_id: responseData.outlet_id,
+        menu_count: responseData.menu_count || 0,
+        created_on: responseData.created_on || "-",
+        created_by: responseData.created_by || "-",
+        updated_on: responseData.updated_on || "-",
+        updated_by: responseData.updated_by || "-",
+        is_active: responseData.is_active === 1, // Convert 1/0 to boolean
+      };
+
+      // Set menu list with validation
+      const menuList = Array.isArray(responseData.menu_list) ? responseData.menu_list : [];
+      
+      setMenuList(menuList);
+      setCategory(categoryData);
+      
+      console.log("✅ Category Set:", categoryData);
+      console.log("✅ Menu List Set:", menuList);
+      
     } catch (err) {
       console.error("❌ Load Category Error:", {
         message: err.message,
         details: err,
+        response: err.response?.data // Log the response data for debugging
       });
       
       // Handle case where error response contains 401 unauthorized
@@ -147,7 +171,8 @@ export default function CategoryDetailsScreen({ route, navigation }) {
           err.response?.data?.detail?.includes('token not valid')) {
         await handleUnauthorized();
       } else {
-        setError("Failed to load category details");
+        // Set more specific error message
+        setError(err.response?.data?.Msg || err.message || "Failed to load category details");
       }
     } finally {
       setLoading(false);
@@ -348,8 +373,8 @@ export default function CategoryDetailsScreen({ route, navigation }) {
               <RefreshControl 
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                colors={["#67B279"]} // Android
-                tintColor="#67B279" // iOS
+                colors={["#67B279"]}
+                tintColor="#67B279"
               />
             }
           >
@@ -420,6 +445,27 @@ export default function CategoryDetailsScreen({ route, navigation }) {
                 <Text style={styles.value}>{category.updated_by}</Text>
               </View>
             </View>
+
+            {/* Add Menu List Section */}
+            {menuList.length > 0 && (
+              <View style={styles.menuListContainer}>
+                <Text style={styles.menuListTitle}>Menu Items</Text>
+                {menuList.map((menu) => (
+                  <View key={menu.menu_id} style={styles.menuItem}>
+                    <View style={styles.menuItemHeader}>
+                      <Text style={styles.menuName}>{menu.menu_name}</Text>
+                      <Text style={styles.menuPrice}>₹{menu.price}</Text>
+                    </View>
+                    <Text style={[
+                      styles.foodType,
+                      { color: menu.food_type === 'veg' ? '#67B279' : '#ff4444' }
+                    ]}>
+                      {menu.food_type.toUpperCase()}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
             {/* Delete Button - Moved inside ScrollView */}
             <TouchableOpacity
@@ -655,5 +701,48 @@ const styles = StyleSheet.create({
   headerButton: {
     marginRight: 15,
     padding: 5,
+  },
+  menuListContainer: {
+    backgroundColor: '#f9f9f9',
+    padding: 16,
+    borderRadius: 8,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  menuListTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  menuItem: {
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  menuItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  menuName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    flex: 1,
+  },
+  menuPrice: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#67B279',
+  },
+  foodType: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
   },
 });

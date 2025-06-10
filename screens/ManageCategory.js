@@ -73,7 +73,7 @@ export default function ManageCategory({ route, navigation }) {
         },
       });
 
-      console.log('Categories Response:', response.data);
+      // console.log('Categories Response:', response.data);
       
       // Transform the API response to match the expected format
       const menuCategories = response.data.data.menucat_details;
