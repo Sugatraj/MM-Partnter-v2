@@ -248,18 +248,13 @@ export default function DashboardScreen() {
       setLoading(true);
       setError(null);
 
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
-      if (!deviceToken) {
-        throw new Error("Device token not found");
-      }
-
-      const response = await axiosInstance.post(
-        `${PARTNER_BASE_URL}/manage/restaurant/list`,
-        { device_token: deviceToken }
+      const response = await axiosInstance.get(
+        `${PARTNER_BASE_URL}/manage/restaurant/list`
       );
       console.log("Restaurant List API Response:", response.data);
 
-      if (response.data.st === 1) {
+      // Check if we have data in the response
+      if (response.data.data && Array.isArray(response.data.data)) {
         const transformedData = response.data.data.map((restaurant) => ({
           id: restaurant.outlet_id,
           outlet_code: restaurant.outlet_code,
@@ -269,13 +264,15 @@ export default function DashboardScreen() {
           outlet_status: restaurant.outlet_status,
           ownerName: restaurant.owner_name,
           isOpen: restaurant.is_open,
-          account_type: restaurant.account_type || 'live',
+          // Maintain any additional fields that might be used in the UI
+          fssainumber: restaurant.fssainumber,
+          gstnumber: restaurant.gstnumber
         }));
 
         console.log("Transformed Restaurant Data:", transformedData);
         setRestaurants(transformedData);
       } else {
-        setError(response.data.msg || "Failed to load restaurants");
+        setError("No restaurants found");
       }
     } catch (err) {
       console.error("API Error:", err);
