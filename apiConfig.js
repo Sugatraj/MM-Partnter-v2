@@ -4,9 +4,12 @@ const IS_TESTING = true; // Only use this for API endpoint selection
 // Add proper build type detection
 const isDevelopmentBuild = __DEV__;  // This is the proper way to detect development builds
 
+// API Version
+const API_VERSION = "v2";  // Update this to "v2" for the new URL pattern
+
 // Base URLs for testing and production (without trailing slashes)
-const TESTING_BASE_URL = "https://men4u.xyz/1.3";
-const PRODUCTION_BASE_URL = "https://menusmitra.xyz/1.3";
+const TESTING_BASE_URL = `https://men4u.xyz/${API_VERSION}`;
+const PRODUCTION_BASE_URL = `https://menusmitra.xyz/${API_VERSION}`;
 
 // App Version Configuration
 const APP_VERSION = "1.3"; // Current app version using semantic versioning
@@ -22,11 +25,13 @@ const joinURL = (...parts) => {
 
 // Base API URLs without trailing slashes
 const BASE_URL = IS_TESTING ? TESTING_BASE_URL : PRODUCTION_BASE_URL;
-const PARTNER_BASE_URL = `${BASE_URL}/${joinURL('partner_api')}`;
-const COMMON_BASE_URL = `${BASE_URL}/${joinURL('common_api')}`;
+
+// Updated URL patterns for v2
+const PARTNER_BASE_URL = `${BASE_URL}/partner`;  // Changed from partner_api to partner
+const COMMON_BASE_URL = `${BASE_URL}/common`;    // Changed from common_api to common
 
 // Version check endpoint
-const VERSION_CHECK_ENDPOINT = `${COMMON_BASE_URL}/${joinURL('check_version')}`;
+const VERSION_CHECK_ENDPOINT = `${COMMON_BASE_URL}/check_version`;
 
 // Print debug information
 if (__DEV__) {
