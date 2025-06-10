@@ -152,11 +152,8 @@ export default function CreateMenu({ route, navigation }) {
         return;
       }
 
-      const response = await axios.post(
+      const response = await axios.get(
         `${COMMON_BASE_URL}/get_food_type_list`,
-        {
-          device_token: deviceToken
-        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -167,37 +164,23 @@ export default function CreateMenu({ route, navigation }) {
       
       console.log('Food types response:', response.data);
       
-      if (response.data.st === 1) {
-        const types = response.data.food_type_list;
-        if (!types) {
-          console.error('No food_type_list in response');
-          Alert.alert('Error', 'No food types available');
-          return;
-        }
-
-        let formattedTypes;
-        if (Array.isArray(types)) {
-          formattedTypes = types.map(type => ({
-            value: type.id?.toString() || type.value?.toString(),
-            label: type.name || type.label
-          }));
-        } else if (typeof types === 'object') {
-          formattedTypes = Object.entries(types).map(([value, label]) => ({
-            value: value.toString(),
-            label: typeof label === 'string' ? label.charAt(0).toUpperCase() + label.slice(1) : label.toString()
-          }));
-        } else {
-          console.error('Unexpected food_type_list format:', types);
-          Alert.alert('Error', 'Invalid food types data format');
-          return;
-        }
-
-        console.log('Formatted food types:', formattedTypes);
-        setFoodTypes(formattedTypes);
-      } else {
-        console.error('Invalid response status:', response.data);
-        Alert.alert('Error', response.data.msg || 'Failed to load food types');
+      const { food_type_list } = response.data;
+      
+      if (!food_type_list || typeof food_type_list !== 'object') {
+        console.error('Invalid food_type_list format:', food_type_list);
+        Alert.alert('Error', 'Invalid food types data received');
+        return;
       }
+
+      // Transform the object into the required format for the picker
+      const formattedTypes = Object.entries(food_type_list).map(([value, label]) => ({
+        value: value,
+        label: label.charAt(0).toUpperCase() + label.slice(1) // Capitalize first letter
+      }));
+
+      console.log('Formatted food types:', formattedTypes);
+      setFoodTypes(formattedTypes);
+      
     } catch (error) {
       console.error("Error loading food types:", error);
       
@@ -232,11 +215,9 @@ export default function CreateMenu({ route, navigation }) {
         return;
       }
 
-      const response = await axios.post(
+      const response = await axios.get(
         `${COMMON_BASE_URL}/get_spicy_index_list`,
-        {
-          device_token: deviceToken
-        },
+        
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -288,11 +269,9 @@ export default function CreateMenu({ route, navigation }) {
         return;
       }
 
-      const response = await axios.post(
-        `${COMMON_BASE_URL}/rating_list`,
-        {
-          device_token: deviceToken
-        },
+      const response = await axios.get(
+        `${COMMON_BASE_URL}/get_rating_list`,
+        
         {
           headers: {
             Authorization: `Bearer ${token}`,
