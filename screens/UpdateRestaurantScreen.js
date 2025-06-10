@@ -43,34 +43,39 @@ export default function UpdateRestaurantScreen({ route, navigation }) {
         });
 
         // Get authentication token and device token
-        const accessToken = await AsyncStorage.getItem('accessToken');
+        const userData = await AsyncStorage.getItem('userData');
+        const parsedUserData = JSON.parse(userData);
+        const accessToken = parsedUserData?.access_token;
         const deviceToken = await AsyncStorage.getItem('devicePushToken');
-        
-        // Headers with Content-Type
-        const headers = {
-          "Content-Type": "application/json",
-        };
-        
-        // Add Authorization header with access token
-        if (accessToken && accessToken.trim() !== '') {
-          headers["Authorization"] = `Bearer ${accessToken}`;
+
+        if (!accessToken) {
+          throw new Error("Access token not found");
         }
-        
-        console.log('Using tokens:', { accessToken, deviceToken });
-        
+
+        if (!deviceToken) {
+          throw new Error("Device token not found");
+        }
+
         const response = await axios.post(
           `${COMMON_BASE_URL}/view_outlet`,
           {
             outlet_id: restaurantId?.toString(),
             user_id: owner_id?.toString(),
-            device_token: deviceToken || '', // Added device token with fallback
+            device_token: deviceToken,
+            app_source: "partner"
           },
-          { headers }
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${accessToken}`,
+            }
+          }
         );
 
         console.log("Restaurant API Response:", response.data);
 
-        if (response.data.st === 1) {
+        // Check if we have data in the response
+        if (response.data.data) {
           const restaurantData = response.data.data;
 
           setFormData({
@@ -79,13 +84,13 @@ export default function UpdateRestaurantScreen({ route, navigation }) {
             gstnumber: restaurantData.gstnumber || "",
             mobile: restaurantData.mobile || "",
             address: restaurantData.address || "",
-            outlet_type: restaurantData.outlet_type || "Restaurant",
+            outlet_type: restaurantData.outlet_type || "outlet",
             veg_nonveg: restaurantData.veg_nonveg || "veg",
             service_charges: restaurantData.service_charges?.toString() || "",
             gst: restaurantData.gst?.toString() || "",
             upi_id: restaurantData.upi_id || "",
-            outlet_status: restaurantData.outlet_status === "true" || restaurantData.outlet_status === true,
-            is_open: restaurantData.is_open === true,
+            outlet_status: restaurantData.outlet_status === 1 || restaurantData.outlet_status === true,
+            is_open: restaurantData.is_open === 1 || restaurantData.is_open === true,
             whatsapp: restaurantData.whatsapp || "",
             instagram: restaurantData.instagram || "",
             facebook: restaurantData.facebook || "",
@@ -99,12 +104,13 @@ export default function UpdateRestaurantScreen({ route, navigation }) {
             image: restaurantData.image || null,
           });
         } else {
-          throw new Error(response.data.msg || "Failed to fetch restaurant details");
+          throw new Error("No restaurant data found");
         }
       } catch (error) {
         console.error("Error fetching restaurant details:", error);
-        setError("Failed to fetch restaurant details");
-        Alert.alert("Error", "Failed to load restaurant details");
+        const errorMessage = error.response?.data?.detail || error.message || "Failed to fetch restaurant details";
+        setError(errorMessage);
+        Alert.alert("Error", errorMessage);
       } finally {
         setLoading(false);
       }
@@ -192,9 +198,6 @@ export default function UpdateRestaurantScreen({ route, navigation }) {
       setSubmitting(true);
       setError(null);
 
-      // Log the current is_open value before submission
-      console.log("Current is_open value:", formData.is_open);
-
       // Validate required fields and GST number
       const validationErrors = {
         name: !formData.name?.trim()
@@ -245,96 +248,67 @@ export default function UpdateRestaurantScreen({ route, navigation }) {
         return;
       }
 
-      // Create FormData instance for handling file uploads properly
-      const apiFormData = new FormData();
-      
-      // Add all restaurant data to FormData
-      apiFormData.append("outlet_id", restaurantId);
-      apiFormData.append("user_id", owner_id?.toString());
-      apiFormData.append("name", formData.name?.trim());
-      apiFormData.append("outlet_type", formData.outlet_type);
-      apiFormData.append("fssainumber", formData.fssainumber?.trim() || "");
-      apiFormData.append("gstnumber", formData.gstnumber?.trim() || "");
-      apiFormData.append("mobile", formData.mobile?.trim());
-      apiFormData.append("veg_nonveg", formData.veg_nonveg);
-      apiFormData.append("service_charges", formData.service_charges || "0");
-      apiFormData.append("gst", formData.gst || "0");
-      apiFormData.append("address", formData.address?.trim() || "");
-      apiFormData.append("is_open", formData.is_open ? "true" : "false");
-      apiFormData.append("outlet_status", formData.outlet_status ? "true" : "false");
-      apiFormData.append("upi_id", formData.upi_id?.trim() || "");
-      apiFormData.append("website", formData.website?.trim() || "");
-      apiFormData.append("whatsapp", formData.whatsapp?.trim() || "");
-      apiFormData.append("facebook", formData.facebook?.trim() || "");
-      apiFormData.append("instagram", formData.instagram?.trim() || "");
-      apiFormData.append("google_business_link", formData.google_business_link?.trim() || "");
-      apiFormData.append("google_review", formData.google_review?.toString() || "");
+      // Get authentication token
+      const userData = await AsyncStorage.getItem('userData');
+      const parsedUserData = JSON.parse(userData);
+      const accessToken = parsedUserData?.access_token;
 
-      // Log the FormData values being sent
-      console.log("FormData being sent:", {
-        outlet_id: restaurantId,
-        user_id: owner_id?.toString(),
-        is_open: formData.is_open ? "true" : "false",
-        formData_is_open: formData.is_open,
-        formData_is_open_type: typeof formData.is_open
-      });
+      if (!accessToken) {
+        throw new Error("Access token not found");
+      }
 
-      // Get authentication token and device token
-      const accessToken = await AsyncStorage.getItem('accessToken');
+      // Get device token
       const deviceToken = await AsyncStorage.getItem('devicePushToken');
-      
-      // Add device token to request body
-      apiFormData.append("device_token", deviceToken || '');
-      
-      // Properly handle image upload if image is available
-      if (formData.image) {
-        const imageUri = formData.image;
-        const filename = imageUri.split("/").pop();
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : "image/jpeg";
-
-        apiFormData.append("image", {
-          uri: imageUri,
-          name: filename || 'image.jpg',
-          type,
-        });
-        
-        console.log("Uploading new image:", filename);
+      if (!deviceToken) {
+        throw new Error("Device token not found");
       }
-
-      console.log("Sending restaurant update data with image");
       
-      // Prepare headers for multipart/form-data request
-      const headers = {
-        'Content-Type': 'multipart/form-data',
-        'Accept': 'application/json',
+      // Prepare the request data according to the new API format
+      const requestData = {
+        outlet_id: restaurantId?.toString(),
+        user_id: owner_id?.toString(),
+        name: formData.name?.trim(),
+        outlet_type: formData.outlet_type,
+        fssainumber: formData.fssainumber?.trim() || "",
+        gstnumber: formData.gstnumber?.trim() || "",
+        mobile: formData.mobile?.trim(),
+        veg_nonveg: formData.veg_nonveg,
+        service_charges: formData.service_charges || "0",
+        gst: formData.gst || "0",
+        address: formData.address?.trim() || "",
+        is_open: formData.is_open ? 1 : 0,
+        outlet_status: formData.outlet_status ? 1 : 0,
+        upi_id: formData.upi_id?.trim() || "",
+        website: formData.website?.trim() || "",
+        whatsapp: formData.whatsapp?.trim() || "",
+        facebook: formData.facebook?.trim() || "",
+        instagram: formData.instagram?.trim() || "",
+        google_business_link: formData.google_business_link?.trim() || "",
+        google_review: formData.google_review?.toString() || "",
+        app_source: "partner",
+        device_token: deviceToken
       };
-      
-      // Add Authorization header with access token
-      if (accessToken && accessToken.trim() !== '') {
-        headers["Authorization"] = `Bearer ${accessToken}`;
-      }
-      
-      console.log('Using auth token for update:', accessToken);
-      
+
+      console.log("Sending update request with data:", requestData);
+
       const response = await axios({
-        method: 'POST',
+        method: 'PATCH',
         url: `${COMMON_BASE_URL}/update_outlet`,
-        data: apiFormData,
-        headers: headers,
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-        timeout: 60000, // 60 seconds timeout
+        data: requestData,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        }
       });
 
-      // Log the API response
-      console.log("API Response:", response.data);
-      console.log("API Response is_open value:", response.data.data?.is_open);
+      console.log("Update API Response:", response.data);
 
-      if (response.data.st === 1) {
+      // Handle the new response format
+      if (response.data.detail) {
         Alert.alert(
           "Success",
-          response.data.msg || "Outlet info updated successfully",
+          response.data.detail,
           [
             {
               text: "OK",
@@ -349,15 +323,13 @@ export default function UpdateRestaurantScreen({ route, navigation }) {
           { cancelable: false }
         );
       } else {
-        throw new Error(response.data.msg || "Failed to update restaurant");
+        throw new Error("Unexpected response format");
       }
+
     } catch (err) {
       console.error("Update Error:", err);
-      Alert.alert(
-        "Error",
-        err.response?.data?.msg || err.message || "Failed to update restaurant",
-        [{ text: "OK" }]
-      );
+      const errorMessage = err.response?.data?.detail || err.message || "Failed to update restaurant";
+      Alert.alert("Error", errorMessage);
     } finally {
       setSubmitting(false);
     }
