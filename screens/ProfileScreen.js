@@ -155,7 +155,8 @@ export default function ProfileScreen({ navigation }) {
 
             const data = await response.json();
 
-            if (data.st === 1) {
+            // Check if logout was successful based on detail field
+            if (data.detail && data.detail.includes("successfully")) {
               await AsyncStorage.multiRemove(['accessToken', 'userData', 'refreshToken']);
               navigation.reset({
                 index: 0,
@@ -175,7 +176,7 @@ export default function ProfileScreen({ navigation }) {
                 });
                 return;
               }
-              Alert.alert("Error", data.msg || "Failed to logout. Please try again.");
+              Alert.alert("Error", data.detail || "Failed to logout. Please try again.");
             }
           } catch (error) {
             console.error("Error during logout:", error);
