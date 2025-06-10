@@ -62,10 +62,10 @@ export default function ManageMenus({ route, navigation }) {
       const deviceToken = await AsyncStorage.getItem("devicePushToken");
 
       const response = await axios.post(
-        `${COMMON_BASE_URL}/menu_listview`,
+        `${COMMON_BASE_URL}/menu_list`,
         {
           outlet_id: parseInt(restaurantId),
-          device_token: deviceToken
+          // device_token: deviceToken
         },
         {
           headers: {

@@ -118,7 +118,6 @@ export default function ViewOwnerScreen({ route, navigation }) {
         `${PARTNER_BASE_URL}/owner/view`,
         {
           owner_id: ownerData.ownerId || ownerData.owner_id,
-          device_token : deviceToken
         },
         {
           headers: {
@@ -130,7 +129,7 @@ export default function ViewOwnerScreen({ route, navigation }) {
 
       console.log("View API Response:", response.data);
 
-      if (response.data.st === 1) {
+      if (response.data.data) {
         const ownerDetails = response.data.data.owner_obj;
         const subscriptionDetails = response.data.data.subscription_outlet || [];
         console.log("---------------Owner Details:-----------", ownerDetails);
@@ -157,7 +156,13 @@ export default function ViewOwnerScreen({ route, navigation }) {
           updated_by: ownerDetails.updated_by,
 
           // Add subscription details
-          subscriptions: subscriptionDetails,
+          subscriptions: subscriptionDetails.map(sub => ({
+            ...sub,
+            // Ensure dates are in the correct format if needed
+            subscription_date: sub.subscription_date,
+            expiry_date: sub.expiry_date,
+            days_until_expiry: parseInt(sub.days_until_expiry)
+          })),
 
           // Preserve IDs
           id: ownerData.user_id,
@@ -167,7 +172,7 @@ export default function ViewOwnerScreen({ route, navigation }) {
         console.log("Transformed Owner Data:", transformedData);
         setOwner(transformedData);
       } else {
-        throw new Error(response.data.Msg || "Failed to load owner details");
+        throw new Error("Failed to load owner details - Invalid response format");
       }
     } catch (err) {
       console.error("View API Error:", {
@@ -177,8 +182,8 @@ export default function ViewOwnerScreen({ route, navigation }) {
       });
 
       let errorMessage = "Failed to load owner details";
-      if (err.response?.data?.Msg) {
-        errorMessage = err.response.data.Msg;
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
       } else if (err.message) {
         errorMessage = err.message;
       }
