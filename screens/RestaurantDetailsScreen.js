@@ -81,40 +81,48 @@ export default function RestaurantDetailsScreen({ route, navigation }) {
       setLoading(true);
       setError(null);
 
-      // Get tokens from AsyncStorage
-      const token = await AsyncStorage.getItem("accessToken");
+      // Get the access token and device token from AsyncStorage
+      const userData = await AsyncStorage.getItem('userData');
+      const parsedUserData = JSON.parse(userData);
+      const accessToken = parsedUserData?.access_token;
       const deviceToken = await AsyncStorage.getItem("devicePushToken");
+
+      if (!accessToken) {
+        throw new Error("Access token not found");
+      }
 
       if (!deviceToken) {
         throw new Error("Device token not found");
       }
 
-      // Call the view API with bearer token and device token
+      // Call the view API with the correct payload and bearer token
       const response = await axios.post(
         `${COMMON_BASE_URL}/view_outlet`,
         {
           outlet_id: restaurantId?.toString(),
           user_id: owner_id,
-          device_token: deviceToken
+          device_token: deviceToken,
+          app_source: "partner"  // Added missing app_source
         },
         {
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+            "Authorization": `Bearer ${accessToken}`,
           },
         }
       );
 
       console.log("Restaurant View API Response:", response.data);
 
-      if (response.data.st === 1) {
+      // Check if we have data in the response
+      if (response.data.data) {
         const restaurantDetails = response.data.data;
 
         // Transform API data to match our UI structure
         const transformedData = {
-          id: restaurantDetails.outlet_id,
-          outlet_id: restaurantDetails.outlet_id,
-          outlet_code: restaurantDetails.outlet_code,
+          id: restaurantId,
+          outlet_id: restaurantId,
+          outlet_code: outlet_code,
           owner_id: restaurantDetails.owner_id,
           owner_name: restaurantDetails.owner_name,
           name: restaurantDetails.name,
@@ -127,8 +135,8 @@ export default function RestaurantDetailsScreen({ route, navigation }) {
           serviceCharges: restaurantDetails.service_charges,
           gst: restaurantDetails.gst,
           upiId: restaurantDetails.upi_id,
-          outlet_status: restaurantDetails.outlet_status,
-          isOpen: restaurantDetails.is_open,
+          outlet_status: restaurantDetails.outlet_status === 1, // Convert to boolean
+          isOpen: restaurantDetails.is_open === 1, // Convert to boolean
           whatsapp: restaurantDetails.whatsapp,
           instagram: restaurantDetails.instagram,
           facebook: restaurantDetails.facebook,
@@ -138,14 +146,11 @@ export default function RestaurantDetailsScreen({ route, navigation }) {
           openingTime: restaurantDetails.opening_time,
           closingTime: restaurantDetails.closing_time,
           image: restaurantDetails.image,
-          totalCategory: restaurantDetails.total_category,
-          totalMenu: restaurantDetails.total_menu,
-          totalCompletedOrders: restaurantDetails.total_completed_orders,
-          totalCancledOrders: restaurantDetails.total_cancelled_orders,
           createdOn: restaurantDetails.created_on,
           createdBy: restaurantDetails.created_by,
           updatedOn: restaurantDetails.updated_on,
           updatedBy: restaurantDetails.updated_by,
+          // Statistics
           totalCategory: restaurantDetails.total_category,
           totalMenu: restaurantDetails.total_menu,
           totalOrder: restaurantDetails.total_order,
@@ -157,6 +162,16 @@ export default function RestaurantDetailsScreen({ route, navigation }) {
           totalInactiveCategory: restaurantDetails.total_inactive_category,
           totalActiveSection: restaurantDetails.total_active_section,
           totalInactiveSection: restaurantDetails.total_inactive_section,
+          // Additional counts
+          waiterCount: restaurantDetails.waiter_count,
+          captainCount: restaurantDetails.captain_count,
+          chefCount: restaurantDetails.chef_count,
+          managerCount: restaurantDetails.manager_count,
+          menuCount: restaurantDetails.menu_count,
+          menuCategoryCount: restaurantDetails.menu_category_count,
+          sectionCount: restaurantDetails.section_count,
+          tableCount: restaurantDetails.table_count,
+          ordersCount: restaurantDetails.orders_count
         };
 
         console.log("Transformed Restaurant Data:", transformedData);
@@ -172,16 +187,17 @@ export default function RestaurantDetailsScreen({ route, navigation }) {
           }
         }
       } else {
-        throw new Error(
-          response.data.Msg || "Failed to load restaurant details"
-        );
+        throw new Error("No restaurant data found");
       }
     } catch (err) {
       console.error("Restaurant View API Error:", {
         message: err.message,
         response: err.response?.data,
       });
-      setError(err.message || "Failed to load restaurant details");
+      
+      // Handle error messages from new API format
+      const errorMessage = err.response?.data?.detail || err.message || "Failed to load restaurant details";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

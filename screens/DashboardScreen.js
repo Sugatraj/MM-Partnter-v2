@@ -248,9 +248,26 @@ export default function DashboardScreen() {
       setLoading(true);
       setError(null);
 
+      // Get the access token from AsyncStorage
+      const userData = await AsyncStorage.getItem('userData');
+      const parsedUserData = JSON.parse(userData);
+      const accessToken = parsedUserData?.access_token;
+
+      if (!accessToken) {
+        throw new Error('Access token not found');
+      }
+
+      // Make the API call with authorization header
       const response = await axiosInstance.get(
-        `${PARTNER_BASE_URL}/manage/restaurant/list`
+        `${PARTNER_BASE_URL}/manage/restaurant/list`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          }
+        }
       );
+      
       console.log("Restaurant List API Response:", response.data);
 
       // Check if we have data in the response
@@ -264,7 +281,6 @@ export default function DashboardScreen() {
           outlet_status: restaurant.outlet_status,
           ownerName: restaurant.owner_name,
           isOpen: restaurant.is_open,
-          // Maintain any additional fields that might be used in the UI
           fssainumber: restaurant.fssainumber,
           gstnumber: restaurant.gstnumber
         }));
@@ -281,6 +297,10 @@ export default function DashboardScreen() {
         err.response?.data?.code === "token_not_valid" ||
         err.response?.data?.detail?.includes("token not valid")
       ) {
+        // Handle unauthorized access - usually redirect to login
+        await handleUnauthorized();
+      } else if (err.message === 'Access token not found') {
+        // Handle missing token - redirect to login
         await handleUnauthorized();
       } else {
         setError(err.message || "Failed to load restaurants");
