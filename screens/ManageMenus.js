@@ -60,12 +60,20 @@ export default function ManageMenus({ route, navigation }) {
       
       const token = await AsyncStorage.getItem("accessToken");
       const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userDataStr = await AsyncStorage.getItem("userData");
+      const userData = JSON.parse(userDataStr);
+
+      if (!userData || !userData.user_id) {
+        throw new Error('User ID not found in stored data');
+      }
 
       const response = await axios.post(
         `${COMMON_BASE_URL}/menu_list`,
         {
           outlet_id: parseInt(restaurantId),
-          // device_token: deviceToken
+          user_id: userData.user_id,
+          device_token: deviceToken,
+          app_source: "partner"
         },
         {
           headers: {
@@ -77,20 +85,21 @@ export default function ManageMenus({ route, navigation }) {
 
       console.log('Menu List API Response:', response.data);
 
-      if (response.data.st === 1) {
-        const menuList = response.data.lists || [];
+      // Check if response.data.detail exists and is an array
+      if (response.data.detail && Array.isArray(response.data.detail)) {
+        const menuList = response.data.detail;
         setMenus(menuList);
         
         // Calculate menu counts
-        const activeMenus = menuList.filter(menu => menu.is_active === true);
-        const inactiveMenus = menuList.filter(menu => menu.is_active === false);
+        const activeMenus = menuList.filter(menu => menu.is_active === 1);
+        const inactiveMenus = menuList.filter(menu => menu.is_active === 0);
         setMenuCounts({
           active: activeMenus.length,
           inactive: inactiveMenus.length,
           total: menuList.length
         });
       } else {
-        throw new Error('Failed to load menus');
+        throw new Error('Invalid response format');
       }
     } catch (err) {
       console.error('Error loading menus:', err);
@@ -140,66 +149,76 @@ export default function ManageMenus({ route, navigation }) {
     }
   };
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.card}
-      onPress={() => navigation.navigate('MenuDetails', { 
-        menuId: item.menu_id,
-        restaurantId: restaurantId
-      })}
-    >
-      <View style={styles.cardContent}>
-        <View style={styles.leftContent}>
-          {item.image ? (
-            <Image 
-              source={{ uri: item.image }} 
-              style={styles.menuImage}
-            />
-          ) : (
-            <View style={styles.placeholderImage}>
-              <FontAwesome name="cutlery" size={32} color="#ccc" />
-            </View>
-          )}
-          <View style={styles.menuInfo}>
-            <Text style={styles.menuName}>{item.name}</Text>
-            <View style={styles.detailsRow}>
-              <Text style={styles.categoryName}>{item.category_name.charAt(0).toUpperCase() + item.category_name.slice(1)}</Text>
-              <View style={[
-                styles.badge,
-                { backgroundColor: getFoodTypeStyles(item.food_type).backgroundColor }
-              ]}>
-                <Text style={[
-                  styles.foodType,
-                  { color: getFoodTypeStyles(item.food_type).color }
-                ]}>
-                  {item.food_type?.toUpperCase() || 'N/A'}
-                </Text>
+  const renderItem = ({ item }) => {
+    // Safely parse spicy_index to ensure valid array length
+    const spicyLevel = parseInt(item.spicy_index);
+    const validSpicyLevel = !isNaN(spicyLevel) && spicyLevel > 0 && spicyLevel <= 5 ? spicyLevel : 0;
+
+    return (
+      <TouchableOpacity 
+        style={styles.card}
+        onPress={() => navigation.navigate('MenuDetails', { 
+          menuId: item.menu_id,
+          restaurantId: restaurantId
+        })}
+      >
+        <View style={styles.cardContent}>
+          <View style={styles.leftContent}>
+            {item.image ? (
+              <Image 
+                source={{ uri: item.image }} 
+                style={styles.menuImage}
+              />
+            ) : (
+              <View style={styles.placeholderImage}>
+                <FontAwesome name="cutlery" size={32} color="#ccc" />
               </View>
-            </View>
-            <View style={styles.priceContainer}>
-              <Text style={styles.price}>₹{item.full_price}</Text>
-              {item.half_price > 0 && (
-                <Text style={styles.price}>₹{item.half_price}</Text>
+            )}
+            <View style={styles.menuInfo}>
+              <Text style={styles.menuName}>{item.name}</Text>
+              <View style={styles.detailsRow}>
+                <Text style={styles.categoryName}>{item.category_name.charAt(0).toUpperCase() + item.category_name.slice(1)}</Text>
+                <View style={[
+                  styles.badge,
+                  { backgroundColor: getFoodTypeStyles(item.food_type).backgroundColor }
+                ]}>
+                  <Text style={[
+                    styles.foodType,
+                    { color: getFoodTypeStyles(item.food_type).color }
+                  ]}>
+                    {item.food_type?.toUpperCase() || 'N/A'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.priceContainer}>
+                {item.portions && item.portions.map((portion, index) => (
+                  <View key={index} style={styles.portionContainer}>
+                    <Text style={styles.portionName}>{portion.portion_name}</Text>
+                    <Text style={styles.price}>₹{portion.price}</Text>
+                  </View>
+                ))}
+              </View>
+              {item.rating && parseFloat(item.rating) > 0 && (
+                <View style={styles.ratingContainer}>
+                  <FontAwesome name="star" size={14} color="#FFB800" />
+                  <Text style={styles.rating}>{item.rating}</Text>
+                </View>
               )}
             </View>
           </View>
-        </View>
-        {/* <View style={styles.rightContent}>
-          {item.rating && (
-            <View style={styles.ratingContainer}>
-              <FontAwesome name="star" size={16} color="#FFB800" />
-              <Text style={styles.rating}>{item.rating}</Text>
-            </View>
-          )}
-          <View style={styles.spicyContainer}>
-            {[...Array(parseInt(item.spicy_index))].map((_, i) => (
-              <FontAwesome key={i} name="fire" size={14} color="#DC2626" style={styles.spicyIcon} />
-            ))}
+          <View style={styles.rightContent}>
+            {validSpicyLevel > 0 && (
+              <View style={styles.spicyContainer}>
+                {Array.from({ length: validSpicyLevel }).map((_, i) => (
+                  <FontAwesome key={i} name="fire" size={14} color="#DC2626" style={styles.spicyIcon} />
+                ))}
+              </View>
+            )}
           </View>
-        </View> */}
-      </View>
-    </TouchableOpacity>
-  );
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -383,9 +402,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   priceContainer: {
+    marginTop: 4,
+  },
+  portionContainer: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    marginBottom: 4,
+  },
+  portionName: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginRight: 8,
   },
   price: {
     fontSize: 14,
@@ -393,26 +421,28 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   rightContent: {
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    paddingRight: 12,
+    justifyContent: 'center',
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEF3C7',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 16,
+    paddingVertical: 2,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 4,
   },
   rating: {
     marginLeft: 4,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: '#92400E',
   },
   spicyContainer: {
     flexDirection: 'row',
-    marginTop: 8,
+    alignItems: 'center',
   },
   spicyIcon: {
     marginLeft: 2,
