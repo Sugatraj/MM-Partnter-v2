@@ -89,15 +89,25 @@ export default function CreateMenu({ route, navigation }) {
   const loadCategories = async () => {
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userDataString = await AsyncStorage.getItem("userData");
+      
+      if (!userDataString) {
+        console.error("User data not found");
+        return;
+      }
+
+      const userData = JSON.parse(userDataString);
+      const userId = userData.user_id;
+
       console.log("Loading categories for restaurant:", restaurantId);
 
       const response = await axios({
         method: "POST",
-        url: `${COMMON_BASE_URL}/menu_category_listview`,
+        url: `${COMMON_BASE_URL}/menu_category_list`,
         data: {
-          outlet_id: restaurantId.toString(),
-          device_token : deviceToken
+          outlet_id: parseInt(restaurantId),
+          user_id: parseInt(userId),
+          app_source: "partner"
         },
         headers: {
           Accept: "application/json",
@@ -109,12 +119,12 @@ export default function CreateMenu({ route, navigation }) {
       console.log("Category List API Response:", response.data);
 
       if (
-        response.data.st === 1 &&
-        Array.isArray(response.data.menucat_details)
+        response.data?.data?.menucat_details &&
+        Array.isArray(response.data.data.menucat_details)
       ) {
         // Filter out categories with null menu_cat_id and transform the data
-        const validCategories = response.data.menucat_details
-          .filter((cat) => cat.menu_cat_id !== null)
+        const validCategories = response.data.data.menucat_details
+          .filter((cat) => cat.menu_cat_id !== null && cat.is_active === 1)
           .map((cat) => ({
             menu_cat_id: cat.menu_cat_id.toString(),
             name: cat.category_name,
