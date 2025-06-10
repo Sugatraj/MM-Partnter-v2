@@ -59,31 +59,25 @@ export default function LoginScreen({ navigation }) {
       setLoading(true);
       
       const response = await axios.post(
-        `${COMMON_BASE_URL}/user_login`,
+        `${COMMON_BASE_URL}/login`,
         {
-          mobile: mobileNumber,
-          role: "partner",
+          mobile: mobileNumber
         }
       );
 
       console.log('API Response:', response.data); // Debug log
 
-      if (response.data.st === 1) {
-        // Check if the user has partner role
-        if (response.data.role === "partner") {
-          navigation.navigate("VerifyOTP", { 
-            mobile: mobileNumber,
-            message: response.data.msg // This contains the OTP
-          });
-        } else {
-          // User exists but doesn't have partner role
-          Alert.alert("Access Denied", "This mobile number is not registered as a partner.");
-        }
-      } else if (response.data.msg && response.data.msg.toLowerCase().includes("not registered")) {
-        // User doesn't exist
-        Alert.alert("Access Denied", "This mobile number is not registered in our system. Please contact support to register as a partner.");
+      // Check if we have a role in the response
+      const userRole = response.data.role;
+
+      if (userRole === "partner") {
+        navigation.navigate("VerifyOTP", { 
+          mobile: mobileNumber,
+          role: userRole // Pass the role to verify OTP screen
+        });
       } else {
-        Alert.alert("Error", response.data.msg || "Login failed");
+        // User exists but doesn't have partner role
+        Alert.alert("Access Denied", "This mobile number is not registered as a partner.");
       }
     } catch (error) {
       console.error('API Error:', error);
@@ -91,7 +85,7 @@ export default function LoginScreen({ navigation }) {
       // Handle network or server errors
       if (error.response) {
         // Server responded with error status
-        Alert.alert('Error', error.response.data?.msg || 'Server error occurred');
+        Alert.alert('Error', error.response.data?.detail || 'Server error occurred');
       } else if (error.request) {
         // Request made but no response received
         Alert.alert('Error', 'Network error. Please check your connection.');

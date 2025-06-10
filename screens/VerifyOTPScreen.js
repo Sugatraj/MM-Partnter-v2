@@ -196,26 +196,26 @@ export default function VerifyOTPScreen({ route, navigation }) {
       const deviceModel = Platform.OS === 'ios' ? 'iPhone' : 'Android';
       const deviceId = await AsyncStorage.getItem('deviceId') || Date.now().toString();
       
-      // Generate random FCM token
-      const fcmToken = generateRandomFCMToken();
-      
-      // Store FCM token for future use
-      await AsyncStorage.setItem('fcmToken', fcmToken);
+      // Generate random FCM token if not exists
+      let fcmToken = await AsyncStorage.getItem('fcmToken');
+      if (!fcmToken) {
+        fcmToken = generateRandomFCMToken();
+        await AsyncStorage.setItem('fcmToken', fcmToken);
+      }
 
       // Clear any previous errors
       setErrors({ message: '' });
 
-      // Prepare the request body according to the API specification
+      // Prepare the request body according to the new v2 API specification
       const requestBody = {
         mobile: mobile,
         otp: enteredOTP,
         fcm_token: fcmToken,
         device_id: deviceId,
-        device_model: deviceModel,
-        role: "partner"
+        device_model: deviceModel
       };
 
-      const apiUrl = `${PARTNER_BASE_URL}/check_otp`;
+      const apiUrl = `${COMMON_BASE_URL}/verify_otp`;
       console.log('API URL:', apiUrl);
       console.log('Request Body:', JSON.stringify(requestBody, null, 2));
       
@@ -231,72 +231,54 @@ export default function VerifyOTPScreen({ route, navigation }) {
         }
       );
 
-      console.log('Response Status:', response.status);
-      console.log('Response Headers:', response.headers);
       console.log('Response Data:', JSON.stringify(response.data, null, 2));
 
       if (!response || !response.data) {
-        console.error('No response data received');
         throw new Error('Server not responding. Please try again.');
       }
 
-      console.log('Received response:', response.data);
+      // Store user data from the new response format
+      const userData = {
+        user_id: response.data.user_id,
+        name: response.data.name,
+        role: response.data.role,
+        access_token: response.data.access_token,
+        expires_at: response.data.expires_at
+      };
 
-      if (response.data.st === 2) {
-        setErrors({ message: "The Mobile number or OTP you entered is incorrect" });
+      // Verify the role is partner
+      if (userData.role !== 'partner') {
+        setErrors({ message: "Access denied. This account is not registered as a partner." });
         return;
       }
 
-      if (response.data.st === 1) {
-        // Check if we have user data
-        if (response.data.data) {
-          const userData = response.data.data;
-          
-          // Store user data
-          await AsyncStorage.setItem("userData", JSON.stringify(userData));
-          
-          // Store tokens
-          if (userData.access) {
-            await AsyncStorage.setItem("accessToken", userData.access);
-          }
-          if (userData.refresh) {
-            await AsyncStorage.setItem("refreshToken", userData.refresh);
-          }
-          
-          // Store device token
-          if (userData.device_token) {
-            await AsyncStorage.setItem("devicePushToken", userData.device_token);
-            console.log('Device token stored:', userData.device_token);
-          }
-          
-          // Navigate to MainApp
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "MainApp" }],
-          });
-          return;
-        } else {
-          throw new Error('No user data received');
-        }
-      } else {
-        // Handle case where response format doesn't match expected structure
-        setErrors({ message: response.data.msg || "Invalid OTP. Please try again." });
-      }
+      // Store the user data
+      await AsyncStorage.setItem("userData", JSON.stringify(userData));
+      
+      // Store access token
+      await AsyncStorage.setItem("accessToken", userData.access_token);
+      
+      // Store device info for future use
+      await AsyncStorage.setItem("deviceId", deviceId);
+      await AsyncStorage.setItem("deviceModel", deviceModel);
+
+      // Navigate to MainApp
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "MainApp" }],
+      });
+
     } catch (error) {
       console.error('OTP Verification Error:', error);
-      console.error('Error Response:', error.response);
-      console.error('Error Request:', error.request);
-      console.error('Error Config:', error.config);
       
       if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        setErrors({ message: error.response.data?.Msg || `Server error: ${error.response.status}` });
+        // The request was made and the server responded with an error
+        setErrors({ message: error.response.data?.detail || `Verification failed. Please try again.` });
       } else if (error.request) {
         // The request was made but no response was received
         setErrors({ message: 'No response from server. Please check your internet connection.' });
       } else {
-        // Something happened in setting up the request that triggered an Error
+        // Something happened in setting up the request
         setErrors({ message: error.message || 'Failed to verify OTP. Please try again.' });
       }
     } finally {

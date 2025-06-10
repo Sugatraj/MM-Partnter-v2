@@ -394,6 +394,9 @@ export default function ProfileScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
             <Text style={styles.versionText}>version {APP_VERSION}</Text>
+            {/* <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.versionText}>Logout</Text>
+            </TouchableOpacity> */}
           </View>
         </View>
       </ScrollView>
