@@ -55,13 +55,16 @@ export default function ManageCategory({ route, navigation }) {
       
       const token = await AsyncStorage.getItem("accessToken");
       const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userData = await AsyncStorage.getItem("userData");
+      const userInfo = JSON.parse(userData);
 
       const response = await axios({
         method: "POST",
-        url: `${COMMON_BASE_URL}/menu_category_listview`,
+        url: `${COMMON_BASE_URL}/menu_category_list`,
         data: {
           outlet_id: restaurantId,
-          device_token: deviceToken
+          user_id: userInfo.user_id,
+          app_source: "partner"
         },
         headers: {
           Accept: "application/json",
@@ -73,24 +76,34 @@ export default function ManageCategory({ route, navigation }) {
       console.log('Categories Response:', response.data);
       
       // Transform the API response to match the expected format
-      const transformedCategories = response.data.menucat_details.map(cat => ({
+      const menuCategories = response.data.data.menucat_details;
+      const transformedCategories = menuCategories.map(cat => ({
         menu_cat_id: cat.menu_cat_id,
         name: cat.category_name,
         image: cat.image,
         menu_count: cat.menu_count,
-        is_active: cat.is_active
-      })).filter(cat => cat.menu_cat_id !== null); // Filter out items with null menu_cat_id
+        is_active: cat.is_active === 1, // Convert 1/0 to true/false
+        outlet_id: cat.outlet_id
+      })).filter(cat => cat.menu_cat_id !== null);
       
       setCategories(transformedCategories);
       
-      // Calculate category counts
-      const activeCategories = transformedCategories.filter(cat => cat.is_active === true);
-      const inactiveCategories = transformedCategories.filter(cat => cat.is_active === false);
-      setCategoryCounts({
-        active: activeCategories.length,
-        inactive: inactiveCategories.length,
-        total: transformedCategories.length
-      });
+      // Use the counts directly from the API response
+      // Taking the counts from the first item since they're same for all items
+      if (menuCategories.length > 0) {
+        setCategoryCounts({
+          active: menuCategories[0].total_active_categories,
+          inactive: menuCategories[0].total_inactive_categories,
+          total: menuCategories[0].total_active_categories + menuCategories[0].total_inactive_categories
+        });
+      } else {
+        // Reset counts if no categories exist
+        setCategoryCounts({
+          active: 0,
+          inactive: 0,
+          total: 0
+        });
+      }
       
     } catch (err) {
       console.error('Load Categories Error:', {
@@ -182,8 +195,6 @@ export default function ManageCategory({ route, navigation }) {
       </View>
     );
   }
-
-
 
   return (
     <View style={styles.container}>
