@@ -57,7 +57,8 @@ export default function UpdateSection({ route, navigation }) {
           outlet_id: restaurantId,
           section_id: parseInt(sectionId),
           device_token:deviceToken,
-          user_id: userData.user_id
+          user_id: userData.user_id,
+          app_source: "partner"
         },
         headers: {
           'Accept': 'application/json',
