@@ -132,13 +132,13 @@ export default function TableDetails({ route, navigation }) {
                 throw new Error("User ID not found");
               }
 
-              console.log('Attempting to delete table:', { tableId, restaurantId });
+              console.log('Attempting to delete table:', { tableId: table.table_id, restaurantId });
 
               const response = await axios({
                 method: "DELETE",
                 url: `${COMMON_BASE_URL}/table_delete`,
                 data: {
-                  table_id: parseInt(tableId),
+                  table_id: parseInt(table.table_id),
                   outlet_id: parseInt(restaurantId),
                   section_id: parseInt(sectionId),
                   user_id: parsedUserData.user_id,
