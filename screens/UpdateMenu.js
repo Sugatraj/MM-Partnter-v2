@@ -31,8 +31,6 @@ export default function UpdateMenu({ route, navigation }) {
 
   const [formData, setFormData] = useState({
     name: "",
-    fullPrice: "",
-    halfPrice: "",
     foodType: "veg",
     categoryId: "",
     spicyIndex: "",
@@ -60,7 +58,6 @@ export default function UpdateMenu({ route, navigation }) {
     name: null,
     nameFormat: null,
     food_type: null,
-    full_price: null,
     menu_cat_id: null,
     spicy_index: null,
     ratings: null
@@ -550,9 +547,7 @@ export default function UpdateMenu({ route, navigation }) {
       name: !formData.name.trim() ? 'Menu name is required' : null,
       nameFormat: !validateCharacters(formData.name) ? 'Menu name can only contain letters, numbers, and spaces' : null,
       food_type: !formData.foodType ? 'Food type is required' : null,
-      full_price: !formData.fullPrice ? 'Full price is required' : null,
       menu_cat_id: !formData.categoryId ? 'Category is required' : null,
-      // spicy index is optional
       ratings: !formData.rating ? 'Rating is required' : null
     };
     
@@ -760,49 +755,6 @@ export default function UpdateMenu({ route, navigation }) {
               />
               {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
               {errors.nameFormat && <Text style={styles.errorText}>{errors.nameFormat}</Text>}
-            </View>
-
-            {/* Prices Row */}
-            <View style={styles.section}>
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, { flex: 1, marginRight: 5 }]}>
-                  <Text style={styles.label}>
-                    <Text style={styles.required}>*</Text> Price
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      errors.full_price && styles.inputError
-                    ]}
-                    value={formData.fullPrice}
-                    onChangeText={(text) => {
-                      const formattedPrice = formatPriceInput(text);
-                      setFormData({ ...formData, fullPrice: formattedPrice });
-                      setErrors({
-                        ...errors,
-                        full_price: !validatePrice(formattedPrice) ? 'Price must be greater than zero' : null
-                      });
-                    }}
-                    keyboardType="numeric"
-                    placeholder="Enter price"
-                  />
-                  {errors.full_price && <Text style={styles.errorText}>{errors.full_price}</Text>}
-                </View>
-
-                {/* <View style={[styles.inputGroup, { flex: 1, marginLeft: 5 }]}>
-                  <Text style={styles.label}>Half Price</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.halfPrice}
-                    onChangeText={(text) => {
-                      const formattedPrice = formatPriceInput(text);
-                      setFormData({ ...formData, halfPrice: formattedPrice });
-                    }}
-                    keyboardType="numeric"
-                    placeholder="Enter half price"
-                  />
-                </View> */}
-              </View>
             </View>
           </View>
 

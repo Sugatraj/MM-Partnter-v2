@@ -396,12 +396,6 @@ export default function CreateMenu({ route, navigation }) {
       newErrors.food_type = 'Food type is required';
     }
     
-    if (!formData.full_price) {
-      newErrors.full_price = 'Full price is required';
-    } else if (parseInt(formData.full_price) === 0) {
-      newErrors.full_price = "Full price should be greater than zero";
-    }
-    
     if (!formData.menu_cat_id) {
       newErrors.menu_cat_id = 'Please select a category';
     }
@@ -431,11 +425,6 @@ export default function CreateMenu({ route, navigation }) {
       }
       if (!formData.food_type) {
         newErrors.food_type = 'Food type is required';
-      }
-      if (!formData.full_price) {
-        newErrors.full_price = 'Full price is required';
-      } else if (parseInt(formData.full_price) === 0) {
-        newErrors.full_price = "Full price should be greater than zero";
       }
 
       setErrors(newErrors);
@@ -617,44 +606,6 @@ export default function CreateMenu({ route, navigation }) {
               {errors.nameFormat && (
                 <Text style={styles.errorText}>{errors.nameFormat}</Text>
               )}
-            </View>
-
-            {/* Prices */}
-            <View style={styles.row}>
-              <View
-                style={[styles.inputGroup, styles.flex1, { marginRight: 10 }]}
-              >
-                <Text style={styles.label}>
-                  <Text style={styles.required}>*</Text> Price 
-                </Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      errors.full_price && styles.inputError,
-                    ]}
-                    value={formData.full_price}
-                    onChangeText={(text) => {
-                      const formattedPrice = formatPriceInput(text);
-                      setFormData({ ...formData, full_price: formattedPrice });
-                      
-                      setErrors({
-                        ...errors,
-                        full_price: !validatePrice(formattedPrice) ? "Full price should be greater than zero" : null
-                      });
-                    }}
-                    keyboardType="numeric"
-                    placeholder="Enter price"
-                  />
-                  <View style={styles.validationContainer}>
-                    <Text style={styles.errorText}>
-                      {errors.full_price || ' '}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-           
             </View>
           </View>
 
