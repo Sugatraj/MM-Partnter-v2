@@ -208,20 +208,28 @@ export default function UpdateMenu({ route, navigation }) {
         const menuData = response.data.detail;
         console.log("Portions data:", menuData.portions);
         
-        // Transform portion data to match the new format
-        const portions = menuData.portions?.map(p => ({
-          portion_name: p.portion_name || "",
-          price: p.price?.toString() || "",
-          unit_value: p.unit_value?.toString() || "",
-          unit_type: p.unit_type || "",
-          flag: p.flag || 0
-        })) || [{
-          portion_name: "",
-          price: "",
-          unit_value: "",
-          unit_type: "",
-          flag: 0
-        }];
+        // Transform portion data to match the required format
+        let portions = [];
+        if (menuData.portions && Array.isArray(menuData.portions)) {
+          portions = menuData.portions.map((p, index) => ({
+            portion_name: p.portion_name || "",
+            price: p.price?.toString() || "",
+            unit_value: p.unit_value?.toString() || "",
+            unit_type: p.unit_type || "",
+            flag: index // Using index as flag for existing portions
+          }));
+        }
+
+        // If no portions exist, add a default empty portion
+        if (portions.length === 0) {
+          portions = [{
+            portion_name: "",
+            price: "",
+            unit_value: "",
+            unit_type: "",
+            flag: 0
+          }];
+        }
 
         setFormData(prevState => ({
           ...prevState,
@@ -234,7 +242,7 @@ export default function UpdateMenu({ route, navigation }) {
           description: menuData.description || "",
           ingredients: menuData.ingredients || "",
           isSpecial: menuData.is_special === true,
-          portions: portions
+          portions: portions // Set the transformed portions data
         }));
 
         // Reset both images and newImages when loading menu data
@@ -951,8 +959,108 @@ export default function UpdateMenu({ route, navigation }) {
             <Text style={styles.sectionTitle}>Portion Details</Text>
             {formData.portions.map((portion, index) => (
               <View key={index} style={styles.portionContainer}>
-                {/* Copy the portion UI components from CreateMenu.js */}
-                {/* ... portion input fields ... */}
+                <View style={styles.portionHeader}>
+                  <Text style={styles.portionTitle}>Portion {index + 1}</Text>
+                  {formData.portions.length > 1 && (
+                    <TouchableOpacity
+                      style={styles.removePortionButton}
+                      onPress={() => {
+                        const updatedPortions = formData.portions.filter((_, i) => i !== index);
+                        setFormData(prev => ({
+                          ...prev,
+                          portions: updatedPortions
+                        }));
+                      }}
+                    >
+                      <FontAwesome name="trash" size={20} color="#dc3545" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Portion Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={portion.portion_name}
+                    onChangeText={(text) => {
+                      const updatedPortions = [...formData.portions];
+                      updatedPortions[index] = {
+                        ...updatedPortions[index],
+                        portion_name: text
+                      };
+                      setFormData(prev => ({
+                        ...prev,
+                        portions: updatedPortions
+                      }));
+                    }}
+                    placeholder="Enter portion name"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Price</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={portion.price}
+                    onChangeText={(text) => {
+                      const formattedPrice = formatPriceInput(text);
+                      const updatedPortions = [...formData.portions];
+                      updatedPortions[index] = {
+                        ...updatedPortions[index],
+                        price: formattedPrice
+                      };
+                      setFormData(prev => ({
+                        ...prev,
+                        portions: updatedPortions
+                      }));
+                    }}
+                    keyboardType="numeric"
+                    placeholder="Enter price"
+                  />
+                </View>
+
+                <View style={styles.row}>
+                  <View style={[styles.inputGroup, { flex: 1, marginRight: 5 }]}>
+                    <Text style={styles.label}>Unit Value</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={portion.unit_value}
+                      onChangeText={(text) => {
+                        const updatedPortions = [...formData.portions];
+                        updatedPortions[index] = {
+                          ...updatedPortions[index],
+                          unit_value: text
+                        };
+                        setFormData(prev => ({
+                          ...prev,
+                          portions: updatedPortions
+                        }));
+                      }}
+                      keyboardType="numeric"
+                      placeholder="Enter unit value"
+                    />
+                  </View>
+
+                  <View style={[styles.inputGroup, { flex: 1, marginLeft: 5 }]}>
+                    <Text style={styles.label}>Unit Type</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={portion.unit_type}
+                      onChangeText={(text) => {
+                        const updatedPortions = [...formData.portions];
+                        updatedPortions[index] = {
+                          ...updatedPortions[index],
+                          unit_type: text
+                        };
+                        setFormData(prev => ({
+                          ...prev,
+                          portions: updatedPortions
+                        }));
+                      }}
+                      placeholder="e.g., gm, ml"
+                    />
+                  </View>
+                </View>
               </View>
             ))}
             
@@ -960,21 +1068,19 @@ export default function UpdateMenu({ route, navigation }) {
               <TouchableOpacity
                 style={styles.addPortionButton}
                 onPress={() => {
-                  if (formData.portions.length < 3) {
-                    setFormData({
-                      ...formData,
-                      portions: [
-                        ...formData.portions,
-                        {
-                          portion_name: "",
-                          price: "",
-                          unit_value: "",
-                          unit_type: "",
-                          flag: formData.portions.length
-                        }
-                      ]
-                    });
-                  }
+                  setFormData(prev => ({
+                    ...prev,
+                    portions: [
+                      ...prev.portions,
+                      {
+                        portion_name: "",
+                        price: "",
+                        unit_value: "",
+                        unit_type: "",
+                        flag: prev.portions.length
+                      }
+                    ]
+                  }));
                 }}
               >
                 <FontAwesome name="plus" size={16} color="#fff" />
