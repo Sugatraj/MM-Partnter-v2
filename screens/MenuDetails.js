@@ -62,10 +62,13 @@ export default function MenuDetails({ route, navigation }) {
       setError(null);
       const token = await AsyncStorage.getItem("accessToken");
       const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userDataString = await AsyncStorage.getItem("userData");
+      const userData = JSON.parse(userDataString);
 
       console.log("Fetching menu details:", {
         menu_id: menuId,
         outlet_id: restaurantId,
+        user_id: userData.user_id
       });
 
       const response = await axios({
@@ -74,8 +77,8 @@ export default function MenuDetails({ route, navigation }) {
         data: {
           menu_id: parseInt(menuId),
           outlet_id: parseInt(restaurantId),
-          device_token : deviceToken
-
+          user_id: parseInt(userData.user_id),
+          app_source: "partner"
         },
         headers: {
           Accept: "application/json",
@@ -85,10 +88,10 @@ export default function MenuDetails({ route, navigation }) {
       });
 
       console.log("Menu Details Response:", response.data);
-      console.log("Images from API:", response.data.data.images);
 
-      if (response.data.st === 1) {
-        const menuData = response.data.data;
+      if (response.data.detail) {
+        const menuData = response.data.detail;
+        console.log("Portions data:", menuData.portions);
         setMenu({
           ...menuData,
           field_labels: {
@@ -96,7 +99,7 @@ export default function MenuDetails({ route, navigation }) {
             food_type: "Food Type",
             category_name: "Category",
             spicy_index: "Spicy Index",
-            full_price: "Price",
+            portions: "Portions",
             offer: "Offer",
             description: "Description",
             ingredients: "Ingredients",
@@ -110,7 +113,7 @@ export default function MenuDetails({ route, navigation }) {
         });
         setCategoryName(menuData.category_name);
       } else {
-        throw new Error(response.data.msg || "Failed to load menu details");
+        throw new Error("Failed to load menu details");
       }
     } catch (error) {
       console.error("Error loading menu details:", {
@@ -122,7 +125,6 @@ export default function MenuDetails({ route, navigation }) {
         },
       });
 
-      // Check for 401 unauthorized
       if (
         error.response?.status === 401 || 
         error.response?.data?.code === 'token_not_valid' ||
@@ -133,7 +135,7 @@ export default function MenuDetails({ route, navigation }) {
       }
 
       setError(
-        error.response?.data?.msg ||
+        error.response?.data?.detail ||
           error.message ||
           "Unable to load menu details. Please try again."
       );
@@ -425,6 +427,27 @@ export default function MenuDetails({ route, navigation }) {
             <Text style={styles.label}>{menu.field_labels.ingredients}</Text>
           </View>
 
+          {/* Portions Section - Moved here */}
+          <View style={styles.fullWidthItem}>
+            <Text style={styles.label}>{menu.field_labels.portions}</Text>
+            {menu.portions && menu.portions.map((portion, index) => (
+              <View key={index} style={styles.portionCard}>
+                <View style={styles.portionHeader}>
+                  <Text style={styles.portionName}>{portion.portion_name}</Text>
+                  <Text style={styles.portionPrice}>₹{portion.price}</Text>
+                </View>
+                {(portion.unit_value || portion.unit_type) && (
+                  <View style={styles.portionDetails}>
+                    <Text style={styles.portionUnit}>
+                      {portion.unit_value && `${portion.unit_value}`}
+                      {portion.unit_type && ` ${portion.unit_type}`}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+
           {/* Additional Details */}
           <View style={styles.fullWidthItem}>
             <Text style={styles.sectionTitle}>Additional Information</Text>
@@ -677,5 +700,49 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
+  },
+  section: {
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#6B7280',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+  },
+  portionCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  portionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  portionName: {
+    fontSize: 16,
+    color: '#1F2937',
+    fontWeight: '500',
+  },
+  portionPrice: {
+    fontSize: 16,
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  portionDetails: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  portionUnit: {
+    fontSize: 14,
+    color: '#6B7280',
   },
 });
