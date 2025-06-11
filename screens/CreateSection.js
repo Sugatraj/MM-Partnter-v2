@@ -38,13 +38,7 @@ export default function CreateSection({ route, navigation }) {
   const handleSubmit = async () => {
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
       const userDataString = await AsyncStorage.getItem('userData');
-
-      if (!deviceToken) {
-        Alert.alert('Error', 'Device token not found');
-        return;
-      }
 
       if (!userDataString) {
         Alert.alert('Error', 'User data not found');
@@ -72,8 +66,8 @@ export default function CreateSection({ route, navigation }) {
         data: {
           section_name: sectionName.trim(),
           outlet_id: parseInt(restaurantId),
-          device_token: deviceToken,
-          user_id: userId
+          user_id: userId,
+          app_source: "partner_app"
         },
         headers: {
           Accept: "application/json",
@@ -84,10 +78,11 @@ export default function CreateSection({ route, navigation }) {
 
       console.log('Create section response:', response.data);
 
-      if (response.data.st === 1) {
+      // V2 API success response handling
+      if (response.status === 200) {
         Alert.alert(
           'Success',
-          'Section created successfully!',
+          response.data.detail || 'Section created successfully!',
           [
             {
               text: 'OK',
@@ -95,8 +90,6 @@ export default function CreateSection({ route, navigation }) {
             }
           ]
         );
-      } else {
-        throw new Error(response.data.Msg || 'Failed to create section');
       }
     } catch (err) {
       console.error('Error creating section:', {
@@ -115,7 +108,9 @@ export default function CreateSection({ route, navigation }) {
         return;
       }
 
-      Alert.alert('Error', err.response?.data?.Msg || 'Failed to create section');
+      // Handle V2 API error response
+      const errorMessage = err.response?.data?.detail || 'Failed to create section';
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
