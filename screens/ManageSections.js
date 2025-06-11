@@ -50,16 +50,24 @@ export default function ManageSections({ route, navigation }) {
       setLoading(true);
       const token = await AsyncStorage.getItem("accessToken");
       const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userData = await AsyncStorage.getItem("userData");
+      const parsedUserData = JSON.parse(userData);
 
       if (!deviceToken) {
         throw new Error("Device token not found");
       }
+
+      if (!parsedUserData?.user_id) {
+        throw new Error("User ID not found");
+      }
+
       const response = await axios({
         method: "POST",
-        url: `${COMMON_BASE_URL}/section_listview`,
+        url: `${COMMON_BASE_URL}/section_list`,
         data: {
           outlet_id: parseInt(restaurantId),
-          device_token: deviceToken
+          app_source: "partner_app",
+          user_id: parsedUserData.user_id
         },
         headers: {
           Accept: "application/json",
@@ -70,10 +78,20 @@ export default function ManageSections({ route, navigation }) {
 
       console.log("Sections Response:", response.data);
 
-      if (response.data.st === 1) {
-        setSections(response.data.data);
+      // Handle the new V2 API response format
+      if (response.data.data) {
+        // Map the response to match the UI requirements
+        const formattedSections = response.data.data.map(section => ({
+          section_id: section.section_id,
+          section_name: section.section_name,
+          table_count: section.table_count,
+          tables: [], // Since we don't use this in the UI, we can keep it empty
+          outlet_code: outlet_code // Preserve the outlet_code from route params
+        }));
+        
+        setSections(formattedSections);
       } else {
-        throw new Error(response.data.Msg || "Failed to load sections");
+        throw new Error("Invalid response format");
       }
     } catch (error) {
       console.error("Error loading sections:", error);

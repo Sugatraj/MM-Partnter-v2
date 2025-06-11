@@ -68,7 +68,7 @@ export default function ProfileScreen({ navigation }) {
         }
       );
 
-      console.log('Full API Response:', JSON.stringify(response.data, null, 2));
+      // console.log('Full API Response:', JSON.stringify(response.data, null, 2));
       if (response.data.data) {
         // Map API response to match existing UI structure
         const userDetails = response.data.data?.user_details;
