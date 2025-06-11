@@ -414,10 +414,6 @@ export default function CreateMenu({ route, navigation }) {
       } else if (parseInt(formData.full_price) === 0) {
         newErrors.full_price = "Full price should be greater than zero";
       }
-      // Spicy index is optional
-      // if (!formData.ratings) {
-      //   newErrors.ratings = 'Please select rating';
-      // }
 
       setErrors(newErrors);
 
@@ -429,27 +425,54 @@ export default function CreateMenu({ route, navigation }) {
       const token = await AsyncStorage.getItem("accessToken");
       const deviceToken = await AsyncStorage.getItem("devicePushToken");
 
-      // Create form data
-      const apiFormData = new FormData();
-      
       if (!userId) {
         throw new Error("User ID not found");
       }
 
+      // Create form data
+      const apiFormData = new FormData();
+      
+      // Basic menu information
       apiFormData.append("user_id", userId.toString());
       apiFormData.append("outlet_id", restaurantId.toString());
-      apiFormData.append("name", formData.name.trim());
-      apiFormData.append("full_price", formData.full_price.toString());
-      apiFormData.append("half_price", formData.half_price || "0");
-      apiFormData.append("food_type", formData.food_type);
       apiFormData.append("menu_cat_id", formData.menu_cat_id);
+      apiFormData.append("name", formData.name.trim());
+      apiFormData.append("food_type", formData.food_type);
+      apiFormData.append("description", formData.description.trim());
       apiFormData.append("spicy_index", formData.spicy_index ? formData.spicy_index.toString() : "");
+      apiFormData.append("ingredients", formData.ingredients.trim());
       apiFormData.append("offer", formData.offer.toString());
       apiFormData.append("rating", formData.ratings.toString());
-      apiFormData.append("description", formData.description.trim());
-      apiFormData.append("ingredients", formData.ingredients.trim());
-      apiFormData.append("is_special", formData.is_special);
+      apiFormData.append("app_source", "partner_app");
       apiFormData.append("device_token", deviceToken);
+
+      // Create portion data array
+      const portionData = [];
+      
+      // Add full portion if price is provided
+      if (formData.full_price) {
+        portionData.push({
+          portion_name: "Full",
+          price: parseFloat(formData.full_price),
+          unit_value: "500",
+          unit_type: "gm",
+          flag: 0
+        });
+      }
+
+      // Add half portion if price is provided
+      if (formData.half_price) {
+        portionData.push({
+          portion_name: "Half",
+          price: parseFloat(formData.half_price),
+          unit_value: "250",
+          unit_type: "gm",
+          flag: 1
+        });
+      }
+
+      // Append portion_data as JSON string
+      apiFormData.append("portion_data", JSON.stringify(portionData));
 
       // Handle multiple images
       if (images.length > 0) {
@@ -468,57 +491,59 @@ export default function CreateMenu({ route, navigation }) {
 
       console.log("Sending menu data:", {
         outlet_id: restaurantId.toString(),
-        name: formData.name,
-        full_price: formData.full_price,
-        half_price: formData.half_price,
-        food_type: formData.food_type,
         menu_cat_id: formData.menu_cat_id,
+        name: formData.name.trim(),
+        food_type: formData.food_type,
+        description: formData.description.trim(),
         spicy_index: formData.spicy_index,
+        ingredients: formData.ingredients.trim(),
         offer: formData.offer,
-        ratings: formData.ratings,
-        description: formData.description,
-        ingredients: formData.ingredients,
-        is_special: formData.is_special,
-        images: images.length > 0 ? "Images attached" : "No images",
+        rating: formData.ratings,
+        portion_data: portionData,
+        images: images.length > 0 ? "Images attached" : "No images"
       });
 
-      const response = await axios.post(
-        `${COMMON_BASE_URL}/menu_create`,
-        apiFormData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
+      const response = await axios({
+        method: 'POST',
+        url: 'https://men4u.xyz/v2/common/menu_create',
+        data: apiFormData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        transformRequest: (data, headers) => {
+          return data;
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+        timeout: 60000 // 60 seconds timeout
+      });
+
+      // V2 API success handling
+      Alert.alert(
+        "Success",
+        response.data.detail || "Menu item created successfully",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              if (route.params?.onUpdate) {
+                route.params.onUpdate();
+              }
+              navigation.goBack();
+            },
           },
-          transformRequest: (data, headers) => {
-            return data;
-          },
-        }
+        ],
+        { cancelable: false }
       );
 
-      if (response.data.st === 1) {
-        Alert.alert(
-          "Success",
-          "Menu item created successfully",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                if (route.params?.onUpdate) {
-                  route.params.onUpdate();
-                }
-                navigation.goBack();
-              },
-            },
-          ],
-          { cancelable: false }
-        );
-      } else {
-        throw new Error(response.data.msg || "Failed to create menu item");
-      }
     } catch (err) {
-      console.error("Create Menu Error:", err);
+      console.error("Create Menu Error:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
       
       // Check for 401 unauthorized
       if (
@@ -530,9 +555,10 @@ export default function CreateMenu({ route, navigation }) {
         return;
       }
       
+      // V2 API error handling
       Alert.alert(
         "Error",
-        err.response?.data?.msg || err.message || "Failed to create menu item"
+        err.response?.data?.detail || err.message || "Failed to create menu item"
       );
     } finally {
       setLoading(false);
