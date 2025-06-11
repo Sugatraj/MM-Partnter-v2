@@ -51,10 +51,10 @@ export default function SectionDetails({ route, navigation }) {
     console.log('-----------Fetching section details for sectionId--------:', sectionId);
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const userData = await AsyncStorage.getItem("userData");
-      const parsedUserData = JSON.parse(userData);
+      const userDataStr = await AsyncStorage.getItem("userData");
+      const userData = JSON.parse(userDataStr);
 
-      if (!parsedUserData?.user_id) {
+      if (!userData?.user_id) {
         throw new Error("User ID not found");
       }
 
@@ -62,11 +62,10 @@ export default function SectionDetails({ route, navigation }) {
         method: 'POST',
         url: `${COMMON_BASE_URL}/section_view`,
         data: {
-          outlet_id: route.params.restaurantId,
+          outlet_id: parseInt(route.params.restaurantId),
           section_id: parseInt(sectionId),
-          app_source: "partner_app",
-          user_id: parsedUserData.user_id,
-          app_source: "partner_app"
+          user_id: parseInt(userData.user_id),
+          app_source: "partner"
         },
         headers: {
           'Accept': 'application/json',
@@ -75,23 +74,45 @@ export default function SectionDetails({ route, navigation }) {
         }
       });
 
-      // New V2 API response handling
-      if (response.data.data) {
+      console.log('Section View API Response:', response.data);
+
+      // V2 API response handling
+      if (response.data?.detail) {
+        const sectionData = response.data.detail;
+        
+        // Validate required fields
+        if (!sectionData.section_id || !sectionData.section_name) {
+          throw new Error('Invalid section data received');
+        }
+
         // Format the response to match what the UI expects
         const formattedSectionDetails = {
-          ...response.data.data,
-          // Add any additional fields that your UI might need
-          // If your UI components expect certain fields, add them here with default values
-          tables: [], // If your UI expects a tables array
-          outlet_code: route.params.outlet_code
+          section_id: sectionData.section_id?.toString(),
+          section_name: sectionData.section_name,
+          outlet_id: route.params.restaurantId?.toString(),
+          tables: sectionData.tables || [],
+          outlet_code: route.params.outlet_code,
+          is_active: sectionData.is_active,
+          created_at: sectionData.created_at,
+          updated_at: sectionData.updated_at
         };
         
+        console.log('Formatted section details:', formattedSectionDetails);
         setSectionDetails(formattedSectionDetails);
       } else {
+        console.error('Unexpected API response format:', response.data);
         throw new Error('Failed to load section details');
       }
     } catch (err) {
-      console.error('Error loading section details:', err);
+      console.error('Error loading section details:', {
+        message: err.message,
+        response: err.response?.data,
+        requestData: {
+          outlet_id: route.params.restaurantId,
+          section_id: sectionId,
+          user_id: userData?.user_id
+        }
+      });
       
       // Check for 401 unauthorized
       if (
@@ -103,7 +124,18 @@ export default function SectionDetails({ route, navigation }) {
         return;
       }
       
-      setError('Failed to load section details');
+      setError(err.response?.data?.detail || err.message || 'Failed to load section details');
+      
+      // Show error alert with more specific message
+      Alert.alert(
+        "Error",
+        err.response?.status === 404 ? "Section not found" :
+        err.response?.data?.detail || 
+        err.message || 
+        "Failed to load section details. Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
