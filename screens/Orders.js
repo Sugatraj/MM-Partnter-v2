@@ -22,6 +22,7 @@ const FILTER_OPTIONS = [
   { label: "Cooking", value: "cooking" },
   { label: "Served", value: "served" },
   { label: "Paid", value: "paid" },
+  { label: "Complementary", value: "complementary" }
 ];
 
 const STATUS_COLORS = {
@@ -29,7 +30,8 @@ const STATUS_COLORS = {
   cooking: '#F97316',   // Orange
   served: '#22C55E',    // Green
   paid: '#8B5CF6',      // Purple
-  cancelled: '#EF4444'  // Red
+  cancelled: '#EF4444', // Red
+  complementary_paid: '#10B981' // Emerald/Teal for complementary
 };
 
 const STATUS_LIGHT_COLORS = {
@@ -37,7 +39,8 @@ const STATUS_LIGHT_COLORS = {
   cooking: '#FFF7ED',   // Light Orange
   served: '#F0FDF4',    // Light Green
   paid: '#F3E8FF',      // Light Purple
-  cancelled: '#FEF2F2'  // Light Red
+  cancelled: '#FEF2F2', // Light Red
+  complementary_paid: '#ECFDF5' // Light Emerald/Teal for complementary
 };
 
 const FilterButton = ({ label, active, onPress }) => (
@@ -93,15 +96,21 @@ export default function Orders({ route, navigation }) {
       setError(null);
       
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userData = await AsyncStorage.getItem("userData");
+      const parsedUserData = JSON.parse(userData);
 
-      // Prepare request body
+      if (!parsedUserData?.user_id) {
+        throw new Error("User ID not found");
+      }
+
+      // Prepare request body for V2 API
       const requestBody = {
-        outlet_id: parseInt(restaurantId),
-        device_token: deviceToken || "",
+        outlet_id: restaurantId.toString(),
+        app_source: "partner_app",
+        user_id: parsedUserData.user_id
       };
 
-      // Only add order_status if a filter is selected and not empty
+      // Add order_status if filter is selected
       if (filter && filter.trim() !== "") {
         requestBody.order_status = filter.trim();
       }
@@ -120,20 +129,14 @@ export default function Orders({ route, navigation }) {
         }
       );
 
-      // Handle both success and "no orders" cases
-      if (response.data.st === 1 || response.data.st === 2) {
-        if (response.data.lists && Array.isArray(response.data.lists)) {
-          setOrders(response.data.lists);
-        } else {
-          setOrders([]);
-        }
-        // Set error message only if st === 2
-        if (response.data.st === 2) {
-          setError(response.data.msg || "No orders found");
-        }
+      // Handle V2 API response
+      if (response.data.lists) {
+        setOrders(response.data.lists);
       } else {
-        throw new Error(response.data.msg || "Failed to fetch orders");
+        setOrders([]);
+        setError("No orders found");
       }
+
     } catch (err) {
       console.error('Error fetching orders:', err);
       console.error('Error details:', {
@@ -142,6 +145,7 @@ export default function Orders({ route, navigation }) {
         config: err.config
       });
       
+      // Check for 401 unauthorized
       if (
         err.response?.status === 401 || 
         err.response?.data?.code === 'token_not_valid' ||
@@ -151,14 +155,11 @@ export default function Orders({ route, navigation }) {
         return;
       }
       
-      // Handle 400 status specifically
-      if (err.response?.status === 400) {
-        setOrders([]);
-        setError(err.response?.data?.msg || "No orders found");
-        return;
-      }
+      // Handle error responses
+      const errorMessage = err.response?.data?.detail || "Failed to fetch orders";
+      setError(errorMessage);
+      setOrders([]);
       
-      setError(err.response?.data?.msg || "Failed to fetch orders");
     } finally {
       setLoading(false);
       setIsInitialLoad(false);
@@ -218,7 +219,7 @@ export default function Orders({ route, navigation }) {
         </View>
         <View style={[styles.statusBadge, { backgroundColor: STATUS_LIGHT_COLORS[item.order_status] }]}>
           <Text style={[styles.statusText, { color: STATUS_COLORS[item.order_status] }]}>
-            {item.order_status?.toUpperCase()}
+            {item.order_status === 'complementary_paid' ? 'COMPLEMENTARY' : item.order_status?.toUpperCase()}
           </Text>
         </View>
       </View>
@@ -243,11 +244,12 @@ export default function Orders({ route, navigation }) {
 
       <View style={styles.priceContainer}>
         <View style={styles.leftPriceSection}>
-          {item.order_status === 'paid' && (
+          {(item.order_status === 'paid' || item.order_status === 'complementary_paid') && (
             <View style={[styles.priceItem, styles.leftAligned]}>
               <View style={styles.paymentMethodBox}>
                 <Text style={styles.priceValue}>
-                  {item.is_paid ? (item.payment_method || item.is_paid.toString()) : 'N/A'}
+                  {item.order_status === 'complementary_paid' ? 'COMPLEMENTARY' : 
+                    (item.payment_method || item.order_payment_settle_type || 'N/A')}
                 </Text>
               </View>
             </View>
@@ -273,7 +275,7 @@ export default function Orders({ route, navigation }) {
         <Text style={styles.dateHeader}>{group.date}</Text>
         {group.data.map((order) => (
           <OrderCard 
-            key={`order-${order.order_number}`} 
+            key={`order-${order.order_id}-${order.order_number}`}
             item={order} 
             date={group.date} 
           />
