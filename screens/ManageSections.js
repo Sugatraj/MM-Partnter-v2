@@ -128,12 +128,6 @@ export default function ManageSections({ route, navigation }) {
             console.log("Deleting section:", item);
             const url = `${COMMON_BASE_URL}/section_delete`;
 
-            const deviceToken = await AsyncStorage.getItem("devicePushToken");
-            if (!deviceToken) {
-              Alert.alert("Error", "Device token not found");
-              return;
-            }
-
             const userData = await AsyncStorage.getItem("userData");
             const parsedUserData = JSON.parse(userData);
             if (!parsedUserData?.user_id) {
@@ -145,27 +139,35 @@ export default function ManageSections({ route, navigation }) {
               user_id: parsedUserData.user_id,
               outlet_id: parseInt(restaurantId),
               section_id: parseInt(item.section_id),
-              device_token: deviceToken
+              app_source: "partner_app"
             };
 
             try {
               const token = await AsyncStorage.getItem("accessToken");
-              const response = await axios.post(url, data, {
+              const response = await axios({
+                method: "DELETE",
+                url: url,
+                data: data,
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${token}`,
-                 
                 },
               });
 
               console.log("Response Data:", response.data);
 
-              if (response.data.st === 1) {
-                Alert.alert("Success", "Section deleted successfully!");
-                loadSections();
-              } else {
-                const errorMessage = response.data.message || "Failed to delete section";
-                Alert.alert("Error", errorMessage);
+              // V2 API success response handling
+              if (response.status === 200) {
+                Alert.alert(
+                  "Success", 
+                  response.data.detail || "Section deleted successfully!",
+                  [
+                    {
+                      text: "OK",
+                      onPress: () => loadSections()
+                    }
+                  ]
+                );
               }
             } catch (error) {
               console.error("Error deleting section:", error);
@@ -180,15 +182,9 @@ export default function ManageSections({ route, navigation }) {
                 return;
               }
 
-              if (error.response) {
-                if (error.response.status === 400) {
-                  alert(`Error: ${error.response.data.Msg}`);
-                } else {
-                  alert(`Error: ${error.response.status} - ${error.response.data.Msg || 'Unknown error'}`);
-                }
-              } else {
-                alert('Error: ' + error.message);
-              }
+              // Handle V2 API error response
+              const errorMessage = error.response?.data?.detail || 'Failed to delete section';
+              Alert.alert("Error", errorMessage);
             }
           }
         }
