@@ -170,13 +170,14 @@ export default function MenuDetails({ route, navigation }) {
             });
 
             const response = await axios({
-              method: "POST",
+              method: "DELETE",
               url: `${COMMON_BASE_URL}/menu_delete`,
               data: {
                 menu_id: parseInt(menuId),
                 outlet_id: parseInt(restaurantId),
                 device_token: deviceToken,
-                user_id: parseInt(userId)
+                user_id: parseInt(userId),
+                app_source: "partner"
               },
               headers: {
                 Accept: "application/json",
