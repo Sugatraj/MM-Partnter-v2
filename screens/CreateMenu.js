@@ -29,7 +29,6 @@ export default function CreateMenu({ route, navigation }) {
   const [userId, setUserId] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
-    full_price: "",
     food_type: "",
     menu_cat_id: categoryId?.toString(),
     spicy_index: "",
@@ -38,6 +37,15 @@ export default function CreateMenu({ route, navigation }) {
     description: "",
     ingredients: "",
     is_special: "False",
+    portions: [
+      {
+        portion_name: "",
+        price: "",
+        unit_value: "",
+        unit_type: "",
+        flag: 0
+      }
+    ]
   });
   const [errors, setErrors] = useState({});
   const [foodTypes, setFoodTypes] = useState([]);
@@ -447,28 +455,21 @@ export default function CreateMenu({ route, navigation }) {
       apiFormData.append("device_token", deviceToken);
 
       // Create portion data array
-      const portionData = [];
-      
-      // Add full portion if price is provided
-      if (formData.full_price) {
-        portionData.push({
-          portion_name: "Full",
-          price: parseFloat(formData.full_price),
-          unit_value: "500",
-          unit_type: "gm",
-          flag: 0
-        });
-      }
+      const portionData = formData.portions
+        .filter(portion => portion.portion_name && portion.price && portion.unit_value && portion.unit_type)
+        .map(portion => ({
+          portion_name: portion.portion_name,
+          price: parseFloat(portion.price),
+          unit_value: portion.unit_value,
+          unit_type: portion.unit_type,
+          flag: portion.flag
+        }));
 
-      // Add half portion if price is provided
-      if (formData.half_price) {
-        portionData.push({
-          portion_name: "Half",
-          price: parseFloat(formData.half_price),
-          unit_value: "250",
-          unit_type: "gm",
-          flag: 1
-        });
+      // Add validation for portions
+      if (portionData.length === 0) {
+        Alert.alert("Error", "At least one portion with complete details is required");
+        setLoading(false);
+        return;
       }
 
       // Append portion_data as JSON string
@@ -843,6 +844,130 @@ export default function CreateMenu({ route, navigation }) {
             </View>
           </View>
 
+          {/* Portion Data Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Portion Details</Text>
+            {formData.portions.map((portion, index) => (
+              <View key={index} style={styles.portionContainer}>
+                <View style={styles.portionHeader}>
+                  <Text style={styles.portionTitle}>Portion {index + 1}</Text>
+                  {index > 0 && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        const newPortions = formData.portions.filter((_, i) => i !== index);
+                        setFormData({ ...formData, portions: newPortions });
+                      }}
+                      style={styles.removePortionButton}
+                    >
+                      <FontAwesome name="trash" size={20} color="#dc3545" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    <Text style={styles.required}>*</Text> Portion Name
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    value={portion.portion_name}
+                    onChangeText={(text) => {
+                      const newPortions = [...formData.portions];
+                      newPortions[index].portion_name = text;
+                      setFormData({ ...formData, portions: newPortions });
+                    }}
+                    placeholder="e.g., Full, Half, Regular"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    <Text style={styles.required}>*</Text> Price
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    value={portion.price}
+                    onChangeText={(text) => {
+                      const formattedPrice = formatPriceInput(text);
+                      const newPortions = [...formData.portions];
+                      newPortions[index].price = formattedPrice;
+                      setFormData({ ...formData, portions: newPortions });
+                    }}
+                    keyboardType="numeric"
+                    placeholder="Enter price"
+                  />
+                </View>
+
+                <View style={styles.row}>
+                  <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+                    <Text style={styles.label}>
+                      <Text style={styles.required}>*</Text> Unit Value
+                    </Text>
+                    <TextInput
+                      style={styles.input}
+                      value={portion.unit_value}
+                      onChangeText={(text) => {
+                        const newPortions = [...formData.portions];
+                        newPortions[index].unit_value = text.replace(/[^0-9]/g, '');
+                        setFormData({ ...formData, portions: newPortions });
+                      }}
+                      keyboardType="numeric"
+                      placeholder="e.g., 250"
+                    />
+                  </View>
+
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>
+                      <Text style={styles.required}>*</Text> Unit Type
+                    </Text>
+                    <View style={styles.pickerContainer}>
+                      <Picker
+                        selectedValue={portion.unit_type}
+                        onValueChange={(value) => {
+                          const newPortions = [...formData.portions];
+                          newPortions[index].unit_type = value;
+                          setFormData({ ...formData, portions: newPortions });
+                        }}
+                        style={styles.picker}
+                      >
+                        <Picker.Item label="Select Unit" value="" />
+                        <Picker.Item label="gm" value="gm" />
+                        <Picker.Item label="ml" value="ml" />
+                        <Picker.Item label="pieces" value="pieces" />
+                      </Picker>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            ))}
+
+            {formData.portions.length < 3 && (
+              <TouchableOpacity
+                style={styles.addPortionButton}
+                onPress={() => {
+                  if (formData.portions.length < 3) {
+                    setFormData({
+                      ...formData,
+                      portions: [
+                        ...formData.portions,
+                        {
+                          portion_name: "",
+                          price: "",
+                          unit_value: "",
+                          unit_type: "",
+                          flag: formData.portions.length
+                        }
+                      ]
+                    });
+                  }
+                }}
+              >
+                <FontAwesome name="plus" size={16} color="#fff" />
+                <Text style={styles.addPortionButtonText}>Add Portion</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           {/* Image Upload */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Menu Image (Max 5)</Text>
@@ -1053,5 +1178,48 @@ const styles = StyleSheet.create({
     color: '#FF0000',
     fontSize: 12,
     lineHeight: 16,
+  },
+  portionContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  portionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  portionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#495057',
+  },
+  removePortionButton: {
+    padding: 5,
+  },
+  addPortionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#67B279',
+    padding: 12,
+    borderRadius: 5,
+    marginTop: 10,
+  },
+  addPortionButtonText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#333',
   },
 });
