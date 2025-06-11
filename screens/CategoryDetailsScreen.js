@@ -250,7 +250,8 @@ export default function CategoryDetailsScreen({ route, navigation }) {
                   outlet_id: Number(category.outlet_id),
                   menu_cat_id: Number(category.menu_cat_id),
                   device_token: deviceToken,
-                  user_id: userData.user_id
+                  user_id: userData.user_id,
+                  app_source: "partner"
                 };
 
                 console.log("📤 Deleting category:", requestBody);
@@ -258,7 +259,7 @@ export default function CategoryDetailsScreen({ route, navigation }) {
                 const response = await fetch(
                   `${COMMON_BASE_URL}/menu_category_delete`,
                   {
-                    method: "POST",
+                    method: "DELETE",
                     headers: {
                       Accept: "application/json",
                       "Content-Type": "application/json",
