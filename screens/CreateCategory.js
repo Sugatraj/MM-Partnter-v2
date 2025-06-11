@@ -143,6 +143,7 @@ export default function CreateCategory({ route, navigation }) {
       apiFormData.append("outlet_id", restaurantId.toString());
       apiFormData.append("category_name", formData.name.trim());
       apiFormData.append("device_token", deviceToken);
+      apiFormData.append("app_source", "partner_app");
 
       // Append image only if selected
       if (formData.image) {
@@ -164,8 +165,6 @@ export default function CreateCategory({ route, navigation }) {
         image: formData.image ? "Image attached" : "No image"
       });
 
-      console.log('Sending form data:', JSON.stringify(apiFormData));
-
       const response = await axios({
         method: 'POST',
         url: `${COMMON_BASE_URL}/menu_category_create`,
@@ -182,26 +181,24 @@ export default function CreateCategory({ route, navigation }) {
 
       console.log("Create Category Response:", response.data);
 
-      if (response.data.st === 1) {
-        Alert.alert(
-          "Success",
-          "Category created successfully",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                if (route.params?.onUpdate) {
-                  route.params.onUpdate();
-                }
-                navigation.goBack();
-              },
+      // V2 API success handling
+      Alert.alert(
+        "Success",
+        response.data.detail || "Category created successfully",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              if (route.params?.onUpdate) {
+                route.params.onUpdate();
+              }
+              navigation.goBack();
             },
-          ],
-          { cancelable: false }
-        );
-      } else {
-        throw new Error(response.data.Msg || "Failed to create category");
-      }
+          },
+        ],
+        { cancelable: false }
+      );
+
     } catch (err) {
       console.error("Create Category Error:", {
         message: err.message,
@@ -219,9 +216,10 @@ export default function CreateCategory({ route, navigation }) {
         return;
       }
       
+      // V2 API error handling
       Alert.alert(
         "Error",
-        err.response?.data?.Msg || err.message || "Failed to create category"
+        err.response?.data?.detail || err.message || "Failed to create category"
       );
     } finally {
       setLoading(false);
