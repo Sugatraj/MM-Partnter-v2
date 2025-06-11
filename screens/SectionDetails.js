@@ -172,14 +172,9 @@ export default function SectionDetails({ route, navigation }) {
   const createNewTable = async () => {
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
       const userDataStr = await AsyncStorage.getItem("userData");
       const userData = JSON.parse(userDataStr);
       const { restaurantId } = route.params;
-
-      if (!deviceToken) {
-        throw new Error('Device token not found');
-      }
 
       if (!userData?.user_id) {
         throw new Error('User ID not found');
@@ -195,9 +190,8 @@ export default function SectionDetails({ route, navigation }) {
         data: {
           outlet_id: parseInt(restaurantId),
           section_id: parseInt(sectionId),
-          device_token: deviceToken,
           user_id: userData.user_id,
-          app_source: "partner_app"
+          app_source: "partner"
         },
         headers: {
           Accept: "application/json",
@@ -208,13 +202,30 @@ export default function SectionDetails({ route, navigation }) {
 
       console.log('Create table response:', JSON.stringify(response.data));
 
-      if (response.data.st === 1) {
-        fetchTables();
+      // Check for the new response format
+      if (response.data.detail === "Outlet table created successfully") {
+        // Show success message
+        Alert.alert(
+          "Success",
+          "Table created successfully",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                // Refresh the tables list
+                fetchTables();
+              }
+            }
+          ]
+        );
       } else {
-        throw new Error(response.data.Msg || "Failed to create table");
+        throw new Error("Unexpected response format");
       }
     } catch (err) {
-      console.error("Error creating table:", err);
+      console.error("Error creating table:", {
+        message: err.message,
+        response: err.response?.data
+      });
       
       // Check for 401 unauthorized
       if (
@@ -226,7 +237,13 @@ export default function SectionDetails({ route, navigation }) {
         return;
       }
       
-      Alert.alert("Error", err.response?.data?.Msg || "Failed to create table");
+      // Show error message
+      Alert.alert(
+        "Error",
+        err.response?.data?.detail || 
+        err.message || 
+        "Failed to create table. Please try again."
+      );
     }
   };
 
