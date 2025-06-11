@@ -51,14 +51,21 @@ export default function SectionDetails({ route, navigation }) {
     console.log('-----------Fetching section details for sectionId--------:', sectionId);
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userData = await AsyncStorage.getItem("userData");
+      const parsedUserData = JSON.parse(userData);
+
+      if (!parsedUserData?.user_id) {
+        throw new Error("User ID not found");
+      }
+
       const response = await axios({
         method: 'POST',
         url: `${COMMON_BASE_URL}/section_view`,
         data: {
           outlet_id: route.params.restaurantId,
           section_id: parseInt(sectionId),
-          device_token:deviceToken
+          app_source: "partner_app",
+          user_id: parsedUserData.user_id
         },
         headers: {
           'Accept': 'application/json',
@@ -67,10 +74,20 @@ export default function SectionDetails({ route, navigation }) {
         }
       });
 
-      if (response.data.st === 1) {
-        setSectionDetails(response.data.data);
+      // New V2 API response handling
+      if (response.data.data) {
+        // Format the response to match what the UI expects
+        const formattedSectionDetails = {
+          ...response.data.data,
+          // Add any additional fields that your UI might need
+          // If your UI components expect certain fields, add them here with default values
+          tables: [], // If your UI expects a tables array
+          outlet_code: route.params.outlet_code
+        };
+        
+        setSectionDetails(formattedSectionDetails);
       } else {
-        throw new Error(response.data.Msg || 'Failed to load section details');
+        throw new Error('Failed to load section details');
       }
     } catch (err) {
       console.error('Error loading section details:', err);
@@ -92,7 +109,6 @@ export default function SectionDetails({ route, navigation }) {
   const fetchTables = async () => {
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
       setLoading(true);
       setError(null);
 
@@ -104,7 +120,7 @@ export default function SectionDetails({ route, navigation }) {
         data: {
           outlet_id: restaurantId.toString(),
           section_id: sectionId.toString(),
-          device_token:deviceToken
+          app_source: "partner_app"
         },
         headers: {
           Accept: "application/json",
@@ -113,13 +129,15 @@ export default function SectionDetails({ route, navigation }) {
         },
       });
 
-      if (response.data.st === 1) {
+      // Handle V2 API response
+      if (response.data.data) {
         const transformedData = response.data.data.map(table => ({
-          table_id: table.table_number?.toString(),
+          table_id: table.table_number?.toString(), // Use table_number as table_id since it's unique
           table_number: table.table_number,
-          outlet_code: table.outlet_code || null,
+          outlet_code: route.params.outlet_code // Get outlet_code from route params since it's not in API response
         }));
 
+        // Sort tables by table number
         const sortedTables = transformedData.sort((a, b) => {
           if (a.table_number === null) return 1;
           if (b.table_number === null) return -1;
@@ -128,7 +146,7 @@ export default function SectionDetails({ route, navigation }) {
         
         setTables(sortedTables);
       } else {
-        throw new Error(response.data.Msg || 'Failed to load tables');
+        throw new Error('Failed to load tables');
       }
     } catch (err) {
       console.error('Error loading tables:', err);
