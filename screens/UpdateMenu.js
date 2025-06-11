@@ -573,15 +573,15 @@ export default function UpdateMenu({ route, navigation }) {
         throw new Error("User ID not found");
       }
 
-      // Validate portions data
+      // Validate and format portion data
       const portionData = formData.portions
         .filter(portion => portion.portion_name && portion.price && portion.unit_value && portion.unit_type)
         .map(portion => ({
           portion_name: portion.portion_name.trim(),
           price: parseFloat(portion.price),
           unit_value: portion.unit_value,
-          unit_type: portion.unit_type,
-          flag: portion.flag
+          unit_type: portion.unit_type.toLowerCase(), // Ensure consistent format
+          flag: portion.flag || 0
         }));
 
       // Validate at least one portion exists
@@ -591,35 +591,26 @@ export default function UpdateMenu({ route, navigation }) {
         return;
       }
 
-      // Prepare request data
-      const requestData = {
-        user_id: parseInt(userId),
-        menu_id: parseInt(menuId),
-        outlet_id: parseInt(restaurantId),
-        name: formData.name.trim(),
-        food_type: formData.foodType,
-        menu_cat_id: parseInt(formData.categoryId),
-        description: formData.description.trim(),
-        spicy_index: formData.spicyIndex ? formData.spicyIndex.toString() : "",
-        ingredients: formData.ingredients.trim(),
-        offer: formData.offer ? parseInt(formData.offer) : 0,
-        rating: formData.rating,
-        is_special: formData.isSpecial,
-        app_source: "partner",
-        portions: portionData
-      };
-
-      // Create FormData for image handling
+      // Create FormData instance
       const apiFormData = new FormData();
 
-      // Append all request data to FormData
-      Object.keys(requestData).forEach(key => {
-        if (key === 'portions') {
-          apiFormData.append(key, JSON.stringify(requestData[key]));
-        } else {
-          apiFormData.append(key, requestData[key]);
-        }
-      });
+      // Append basic menu data
+      apiFormData.append("user_id", userId.toString());
+      apiFormData.append("menu_id", menuId.toString());
+      apiFormData.append("outlet_id", restaurantId.toString());
+      apiFormData.append("name", formData.name.trim());
+      apiFormData.append("food_type", formData.foodType);
+      apiFormData.append("menu_cat_id", formData.categoryId);
+      apiFormData.append("description", formData.description.trim());
+      apiFormData.append("spicy_index", formData.spicyIndex || "");
+      apiFormData.append("ingredients", formData.ingredients.trim());
+      apiFormData.append("offer", formData.offer ? formData.offer.toString() : "0");
+      apiFormData.append("rating", formData.rating);
+      apiFormData.append("is_special", formData.isSpecial ? "true" : "false");
+      apiFormData.append("app_source", "partner");
+
+      // Append portion data as JSON string
+      apiFormData.append("portion_data", JSON.stringify(portionData));
 
       // Handle new images
       if (newImages.length > 0) {
@@ -652,7 +643,10 @@ export default function UpdateMenu({ route, navigation }) {
       }
 
       console.log('Updating menu with data:', {
-        ...requestData,
+        name: formData.name,
+        food_type: formData.foodType,
+        menu_cat_id: formData.categoryId,
+        portions: portionData,
         newImages: newImages.length,
         removedImageIds,
         remainingImages
@@ -1004,7 +998,7 @@ export default function UpdateMenu({ route, navigation }) {
                         const updatedPortions = formData.portions.filter((_, i) => i !== index);
                         setFormData(prev => ({
                           ...prev,
-                          portions: updatedPortions
+                          portions: updatedPortions.map((p, i) => ({ ...p, flag: i }))
                         }));
                       }}
                     >
@@ -1014,29 +1008,33 @@ export default function UpdateMenu({ route, navigation }) {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Portion Name</Text>
+                  <Text style={styles.label}>
+                    <Text style={styles.required}>*</Text> Portion Name
+                  </Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, !portion.portion_name && styles.inputError]}
                     value={portion.portion_name}
                     onChangeText={(text) => {
                       const updatedPortions = [...formData.portions];
                       updatedPortions[index] = {
                         ...updatedPortions[index],
-                        portion_name: text
+                        portion_name: text.trim()
                       };
                       setFormData(prev => ({
                         ...prev,
                         portions: updatedPortions
                       }));
                     }}
-                    placeholder="Enter portion name"
+                    placeholder="e.g., Full, Half, Regular"
                   />
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Price</Text>
+                  <Text style={styles.label}>
+                    <Text style={styles.required}>*</Text> Price
+                  </Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, !portion.price && styles.inputError]}
                     value={portion.price}
                     onChangeText={(text) => {
                       const formattedPrice = formatPriceInput(text);
@@ -1057,15 +1055,17 @@ export default function UpdateMenu({ route, navigation }) {
 
                 <View style={styles.row}>
                   <View style={[styles.inputGroup, { flex: 1, marginRight: 5 }]}>
-                    <Text style={styles.label}>Unit Value</Text>
+                    <Text style={styles.label}>
+                      <Text style={styles.required}>*</Text> Unit Value
+                    </Text>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, !portion.unit_value && styles.inputError]}
                       value={portion.unit_value}
                       onChangeText={(text) => {
                         const updatedPortions = [...formData.portions];
                         updatedPortions[index] = {
                           ...updatedPortions[index],
-                          unit_value: text
+                          unit_value: text.replace(/[^0-9]/g, '')
                         };
                         setFormData(prev => ({
                           ...prev,
@@ -1073,20 +1073,22 @@ export default function UpdateMenu({ route, navigation }) {
                         }));
                       }}
                       keyboardType="numeric"
-                      placeholder="Enter unit value"
+                      placeholder="e.g., 250"
                     />
                   </View>
 
                   <View style={[styles.inputGroup, { flex: 1, marginLeft: 5 }]}>
-                    <Text style={styles.label}>Unit Type</Text>
+                    <Text style={styles.label}>
+                      <Text style={styles.required}>*</Text> Unit Type
+                    </Text>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, !portion.unit_type && styles.inputError]}
                       value={portion.unit_type}
                       onChangeText={(text) => {
                         const updatedPortions = [...formData.portions];
                         updatedPortions[index] = {
                           ...updatedPortions[index],
-                          unit_type: text
+                          unit_type: text.toLowerCase()
                         };
                         setFormData(prev => ({
                           ...prev,
