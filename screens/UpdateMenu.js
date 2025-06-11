@@ -567,49 +567,59 @@ export default function UpdateMenu({ route, navigation }) {
 
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
       setLoading(true);
-      const apiFormData = new FormData();
 
       if (!userId) {
         throw new Error("User ID not found");
       }
 
-      // Basic menu information
-      apiFormData.append("user_id", userId.toString());
-      apiFormData.append("menu_id", menuId.toString());
-      apiFormData.append("outlet_id", restaurantId.toString());
-      apiFormData.append("name", formData.name.trim());
-      apiFormData.append("food_type", formData.foodType);
-      apiFormData.append("menu_cat_id", formData.categoryId);
-      apiFormData.append("description", formData.description.trim());
-      apiFormData.append("spicy_index", formData.spicyIndex ? formData.spicyIndex.toString() : "");
-      apiFormData.append("ingredients", formData.ingredients.trim());
-      apiFormData.append("offer", formData.offer.toString());
-      apiFormData.append("rating", formData.rating.toString());
-      apiFormData.append("app_source", "partner_app");
-      apiFormData.append("device_token", await AsyncStorage.getItem("devicePushToken"));
-
-      // Create portion data array
+      // Validate portions data
       const portionData = formData.portions
         .filter(portion => portion.portion_name && portion.price && portion.unit_value && portion.unit_type)
         .map(portion => ({
-          portion_name: portion.portion_name,
+          portion_name: portion.portion_name.trim(),
           price: parseFloat(portion.price),
           unit_value: portion.unit_value,
           unit_type: portion.unit_type,
           flag: portion.flag
         }));
 
-      // Add validation for portions
+      // Validate at least one portion exists
       if (portionData.length === 0) {
         Alert.alert("Error", "At least one portion with complete details is required");
         setLoading(false);
         return;
       }
 
-      // Append portion_data as JSON string
-      apiFormData.append("portion_data", JSON.stringify(portionData));
+      // Prepare request data
+      const requestData = {
+        user_id: parseInt(userId),
+        menu_id: parseInt(menuId),
+        outlet_id: parseInt(restaurantId),
+        name: formData.name.trim(),
+        food_type: formData.foodType,
+        menu_cat_id: parseInt(formData.categoryId),
+        description: formData.description.trim(),
+        spicy_index: formData.spicyIndex ? formData.spicyIndex.toString() : "",
+        ingredients: formData.ingredients.trim(),
+        offer: formData.offer ? parseInt(formData.offer) : 0,
+        rating: formData.rating,
+        is_special: formData.isSpecial,
+        app_source: "partner",
+        portions: portionData
+      };
+
+      // Create FormData for image handling
+      const apiFormData = new FormData();
+
+      // Append all request data to FormData
+      Object.keys(requestData).forEach(key => {
+        if (key === 'portions') {
+          apiFormData.append(key, JSON.stringify(requestData[key]));
+        } else {
+          apiFormData.append(key, requestData[key]);
+        }
+      });
 
       // Handle new images
       if (newImages.length > 0) {
@@ -629,16 +639,28 @@ export default function UpdateMenu({ route, navigation }) {
       // Handle removed images
       if (removedImageIds.length > 0) {
         apiFormData.append('remove_image_flag', 'True');
-        apiFormData.append('existing_image_ids', JSON.stringify(removedImageIds));
+        apiFormData.append('removed_image_ids', JSON.stringify(removedImageIds));
       }
 
-      // Send list of remaining existing images
-      const remainingImages = images.filter(img => !newImages.includes(img) && !removedImageIds.includes(img.id));
-      apiFormData.append('existing_images', JSON.stringify(remainingImages));
+      // Handle remaining existing images
+      const remainingImages = images
+        .filter(img => img.id && !removedImageIds.includes(img.id))
+        .map(img => img.id);
+      
+      if (remainingImages.length > 0) {
+        apiFormData.append('existing_image_ids', JSON.stringify(remainingImages));
+      }
+
+      console.log('Updating menu with data:', {
+        ...requestData,
+        newImages: newImages.length,
+        removedImageIds,
+        remainingImages
+      });
 
       const response = await axios({
-        method: 'POST',
-        url: 'https://men4u.xyz/v2/common/menu_update',
+        method: 'PUT',
+        url: `${COMMON_BASE_URL}/menu_update`,
         data: apiFormData,
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -653,26 +675,34 @@ export default function UpdateMenu({ route, navigation }) {
         timeout: 60000
       });
 
-      // V2 API success handling
-      Alert.alert(
-        "Success",
-        response.data.detail || "Menu item updated successfully",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              if (route.params?.onUpdate) {
-                route.params.onUpdate();
-              }
-              navigation.goBack();
+      console.log('Menu update response:', response.data);
+
+      if (response.data.detail) {
+        Alert.alert(
+          "Success",
+          "Menu item updated successfully",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                if (route.params?.onUpdate) {
+                  route.params.onUpdate();
+                }
+                navigation.goBack();
+              },
             },
-          },
-        ],
-        { cancelable: false }
-      );
+          ],
+          { cancelable: false }
+        );
+      } else {
+        throw new Error("Unexpected response format");
+      }
 
     } catch (error) {
-      console.error("Error updating menu:", error);
+      console.error("Error updating menu:", {
+        message: error.message,
+        response: error.response?.data,
+      });
       
       if (
         error.response?.status === 401 || 
@@ -682,11 +712,17 @@ export default function UpdateMenu({ route, navigation }) {
         await handleUnauthorized();
         return;
       }
+
+      let errorMessage = "Failed to update menu";
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
       
-      Alert.alert(
-        "Error",
-        error.response?.data?.msg || "Failed to update menu"
-      );
+      Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);
     }
