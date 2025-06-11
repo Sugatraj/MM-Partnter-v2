@@ -45,7 +45,13 @@ export default function TableDetails({ route, navigation }) {
   const loadTableDetails = async () => {
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userData = await AsyncStorage.getItem("userData");
+      const parsedUserData = JSON.parse(userData);
+
+      if (!parsedUserData?.user_id) {
+        throw new Error("User ID not found");
+      }
+
       setLoading(true);
       console.log('Loading table details:', { tableId, restaurantId });
 
@@ -56,7 +62,8 @@ export default function TableDetails({ route, navigation }) {
           table_number: parseInt(tableId),
           outlet_id: parseInt(restaurantId),
           section_id: parseInt(sectionId),
-          device_token:deviceToken
+          app_source: "partner_app",
+          user_id: parsedUserData.user_id
         },
         headers: {
           Accept: "application/json",
@@ -67,8 +74,18 @@ export default function TableDetails({ route, navigation }) {
 
       console.log('Table View API Response:', response.data);
 
-      if (response.data.st === 1 && response.data.data) {
-        setTable(response.data.data);
+      // Handle V2 API response
+      if (response.data.data) {
+        // Transform the data to match UI expectations if needed
+        const formattedTableData = {
+          ...response.data.data,
+          // Add any additional fields that your UI might expect
+          // Convert section_id to section_name if UI expects it that way
+          section_name: response.data.data.section_id, // since V2 sends section name in section_id field
+          // Add any other fields your UI components might expect
+        };
+        
+        setTable(formattedTableData);
       } else {
         throw new Error('Invalid table data received');
       }
@@ -88,7 +105,7 @@ export default function TableDetails({ route, navigation }) {
         return;
       }
       
-      Alert.alert('Error', 'Failed to load table details');
+      Alert.alert('Error', error.message || 'Failed to load table details');
     } finally {
       setLoading(false);
     }
@@ -215,7 +232,7 @@ export default function TableDetails({ route, navigation }) {
 
           <View style={styles.infoContainer}>
             <Text style={styles.tableNumber}>Table {table.table_number}</Text>
-            <Text style={styles.sectionName}>Section: {table.section_id}</Text>
+            <Text style={styles.sectionName}>Section: {table.section_name}</Text>
             {/* <Text style={styles.outletCode}>Code: {table.outlet_code}</Text> */}
           </View>
 
