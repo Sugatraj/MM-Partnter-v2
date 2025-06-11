@@ -109,15 +109,25 @@ export default function UpdateMenu({ route, navigation }) {
   const loadCategories = async () => {
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userDataString = await AsyncStorage.getItem("userData");
+      
+      if (!userDataString) {
+        console.error("User data not found");
+        return;
+      }
+
+      const userData = JSON.parse(userDataString);
+      const userId = userData.user_id;
+
       console.log("Loading categories for restaurant:", restaurantId);
 
       const response = await axios({
         method: "POST",
-        url: `${COMMON_BASE_URL}/menu_category_listview`,
+        url: `${COMMON_BASE_URL}/menu_category_list`,
         data: {
           outlet_id: parseInt(restaurantId),
-          device_token:deviceToken
+          user_id: parseInt(userId),
+          app_source: "partner"
         },
         headers: {
           Accept: "application/json",
@@ -129,24 +139,35 @@ export default function UpdateMenu({ route, navigation }) {
       console.log("Category List API Response:", response.data);
 
       if (
-        response.data.st === 1 &&
-        Array.isArray(response.data.menucat_details)
+        response.data?.data?.menucat_details &&
+        Array.isArray(response.data.data.menucat_details)
       ) {
-        // Transform and filter the categories
-        const validCategories = response.data.menucat_details
-          .filter((cat) => cat.menu_cat_id !== null) // Remove categories with null ID
+        // Filter out categories with null menu_cat_id and transform the data
+        const validCategories = response.data.data.menucat_details
+          .filter((cat) => cat.menu_cat_id !== null && cat.is_active === 1)
           .map((cat) => ({
-            menu_cat_id: cat.menu_cat_id,
+            menu_cat_id: cat.menu_cat_id.toString(),
             name: cat.category_name,
-            menu_count: cat.menu_count,
           }));
         setCategories(validCategories);
       } else {
+        console.error("Unexpected API response format:", response.data);
         throw new Error("Invalid category data received");
       }
     } catch (error) {
       console.error("Error loading categories:", error);
-      alert("Failed to load categories");
+      
+      // Check for 401 unauthorized
+      if (
+        error.response?.status === 401 || 
+        error.response?.data?.code === 'token_not_valid' ||
+        error.response?.data?.detail?.includes('token not valid')
+      ) {
+        await handleUnauthorized();
+        return;
+      }
+      
+      Alert.alert("Error", "Failed to load categories");
     }
   };
 
@@ -154,7 +175,15 @@ export default function UpdateMenu({ route, navigation }) {
     try {
       const token = await AsyncStorage.getItem("accessToken");
       const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userDataString = await AsyncStorage.getItem("userData");
+      const userData = JSON.parse(userDataString);
       setLoading(true);
+
+      console.log("Fetching menu details:", {
+        menu_id: menuId,
+        outlet_id: restaurantId,
+        user_id: userData.user_id
+      });
 
       const response = await axios({
         method: "POST",
@@ -162,6 +191,8 @@ export default function UpdateMenu({ route, navigation }) {
         data: {
           menu_id: parseInt(menuId),
           outlet_id: parseInt(restaurantId),
+          user_id: parseInt(userData.user_id),
+          app_source: "partner",
           device_token: deviceToken
         },
         headers: {
@@ -173,8 +204,9 @@ export default function UpdateMenu({ route, navigation }) {
 
       console.log("Menu View API Response:", response.data);
 
-      if (response.data.st === 1 && response.data.data) {
-        const menuData = response.data.data;
+      if (response.data.detail) {
+        const menuData = response.data.detail;
+        console.log("Portions data:", menuData.portions);
         
         // Transform portion data to match the new format
         const portions = menuData.portions?.map(p => ({
@@ -212,14 +244,11 @@ export default function UpdateMenu({ route, navigation }) {
         // Set image if exists
         if (menuData.images && menuData.images.length > 0) {
           console.log('Processing menu images:', menuData.images);
-          // Convert image objects to URIs if needed
           const processedImages = menuData.images.map(img => {
-            console.log('Processing image:', img);
             let imageUrl = '';
             let imageId = null;
 
             try {
-              // Handle different image object formats
               if (typeof img === 'string') {
                 imageUrl = img;
               } else if (img && typeof img === 'object') {
@@ -235,13 +264,11 @@ export default function UpdateMenu({ route, navigation }) {
                 }
               }
 
-              // Ensure the URL is a string and not empty
               if (typeof imageUrl !== 'string' || !imageUrl) {
                 console.log('Invalid image URL:', imageUrl);
                 return null;
               }
 
-              // Ensure the URL is properly formatted
               if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://') && !imageUrl.startsWith('file://')) {
                 imageUrl = `https://${imageUrl}`;
               }
@@ -254,7 +281,7 @@ export default function UpdateMenu({ route, navigation }) {
               console.error('Error processing image:', error);
               return null;
             }
-          }).filter(img => img !== null && img.url); // Remove any null or invalid images
+          }).filter(img => img !== null && img.url);
           
           console.log('Final processed images:', processedImages);
           setImages(processedImages);
@@ -266,7 +293,14 @@ export default function UpdateMenu({ route, navigation }) {
         throw new Error("Failed to load menu details");
       }
     } catch (error) {
-      console.error("Error loading menu:", error);
+      console.error("Error loading menu details:", {
+        message: error.message,
+        response: error.response?.data,
+        requestData: {
+          menu_id: menuId,
+          outlet_id: restaurantId,
+        },
+      });
       
       if (
         error.response?.status === 401 || 
@@ -277,8 +311,12 @@ export default function UpdateMenu({ route, navigation }) {
         return;
       }
       
-      alert("Failed to load menu details");
-      navigation.goBack();
+      Alert.alert(
+        "Error",
+        error.response?.data?.detail || 
+        error.message || 
+        "Unable to load menu details. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -287,19 +325,9 @@ export default function UpdateMenu({ route, navigation }) {
   const loadFoodTypes = async () => {
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
 
-      if (!deviceToken) {
-        console.error('Device token not found');
-        Alert.alert('Error', 'Device token not found. Please try again.');
-        return;
-      }
-
-      const response = await axios.post(
+      const response = await axios.get(
         `${COMMON_BASE_URL}/get_food_type_list`,
-        {
-          device_token: deviceToken
-        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -309,17 +337,41 @@ export default function UpdateMenu({ route, navigation }) {
       );
       
       console.log('Food types response:', response.data);
-      if (response.data.st === 1) {
-        const types = response.data.food_type_list;
-        const formattedTypes = Object.entries(types).map(([value, label]) => ({
-          value,
-          label: label.charAt(0).toUpperCase() + label.slice(1),
-        }));
-        setFoodTypes(formattedTypes);
+      
+      const { food_type_list } = response.data;
+      
+      if (!food_type_list || typeof food_type_list !== 'object') {
+        console.error('Invalid food_type_list format:', food_type_list);
+        Alert.alert('Error', 'Invalid food types data received');
+        return;
       }
+
+      // Transform the object into the required format for the picker
+      const formattedTypes = Object.entries(food_type_list).map(([value, label]) => ({
+        value: value,
+        label: label.charAt(0).toUpperCase() + label.slice(1) // Capitalize first letter
+      }));
+
+      console.log('Formatted food types:', formattedTypes);
+      setFoodTypes(formattedTypes);
+      
     } catch (error) {
       console.error("Error loading food types:", error);
-      Alert.alert("Error", "Failed to load food types");
+      
+      if (error.response?.status === 502) {
+        Alert.alert('Error', 'Server is temporarily unavailable. Please try again in a few moments.');
+      } else if (error.code === 'ECONNABORTED') {
+        Alert.alert('Error', 'Request timed out. Please check your internet connection.');
+      } else if (
+        error.response?.status === 401 || 
+        error.response?.data?.code === 'token_not_valid' ||
+        error.response?.data?.detail?.includes('token not valid')
+      ) {
+        await handleUnauthorized();
+        return;
+      } else {
+        Alert.alert("Error", "Failed to load food types. Please try again.");
+      }
     }
   };
 
@@ -327,17 +379,15 @@ export default function UpdateMenu({ route, navigation }) {
     try {
       const token = await AsyncStorage.getItem("accessToken");
       const deviceToken = await AsyncStorage.getItem("devicePushToken");
+
       if (!deviceToken) {
         console.error('Device token not found');
         Alert.alert('Error', 'Device token not found. Please try again.');
         return;
       }
 
-      const response = await axios.post(
+      const response = await axios.get(
         `${COMMON_BASE_URL}/get_spicy_index_list`,
-        {
-          device_token: deviceToken
-        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -345,6 +395,7 @@ export default function UpdateMenu({ route, navigation }) {
           },
         }
       );
+
       if (response.data.st === 1) {
         const levels = response.data.spicy_index_list;
         const formattedLevels = Object.entries(levels).map(
@@ -357,25 +408,30 @@ export default function UpdateMenu({ route, navigation }) {
       }
     } catch (error) {
       console.error("Error loading spicy levels:", error);
-      Alert.alert("Error", "Failed to load spicy levels");
+      
+      if (error.response?.status === 502) {
+        Alert.alert('Error', 'Server is temporarily unavailable. Please try again in a few moments.');
+      } else if (error.code === 'ECONNABORTED') {
+        Alert.alert('Error', 'Request timed out. Please check your internet connection.');
+      } else if (
+        error.response?.status === 401 || 
+        error.response?.data?.code === 'token_not_valid' ||
+        error.response?.data?.detail?.includes('token not valid')
+      ) {
+        await handleUnauthorized();
+        return;
+      } else {
+        Alert.alert("Error", "Failed to load spicy levels. Please try again.");
+      }
     }
   };
 
   const loadRatingOptions = async () => {
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
-      if (!deviceToken) {
-        console.error('Device token not found');
-        Alert.alert('Error', 'Device token not found. Please try again.');
-        return;
-      }
 
-      const response = await axios.post(
-        `${COMMON_BASE_URL}/rating_list`,
-        {
-          device_token: deviceToken
-        },
+      const response = await axios.get(
+        `${COMMON_BASE_URL}/get_rating_list`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -383,19 +439,45 @@ export default function UpdateMenu({ route, navigation }) {
           },
         }
       );
-      if (response.data.st === 1) {
-        const ratings = response.data.rating_list;
-        const formattedRatings = Object.entries(ratings).map(
-          ([value, label]) => ({
-            value,
-            label: label.toString(),
-          })
-        );
-        setRatingOptions(formattedRatings);
-      } 
+
+      console.log('Rating options response:', response.data);
+
+      const { rating_list } = response.data;
+
+      if (!rating_list || typeof rating_list !== 'object') {
+        console.error('Invalid rating_list format:', rating_list);
+        Alert.alert('Error', 'Invalid rating data received');
+        return;
+      }
+
+      // Transform the object into array format for picker
+      const formattedRatings = Object.entries(rating_list)
+        .map(([value, label]) => ({
+          value: value,
+          label: label
+        }))
+        .sort((a, b) => parseFloat(a.value) - parseFloat(b.value)); // Sort by numeric value
+
+      console.log('Formatted rating options:', formattedRatings);
+      setRatingOptions(formattedRatings);
+
     } catch (error) {
       console.error("Error loading ratings:", error);
-      Alert.alert("Error", "Failed to load rating options");
+      
+      if (error.response?.status === 502) {
+        Alert.alert('Error', 'Server is temporarily unavailable. Please try again in a few moments.');
+      } else if (error.code === 'ECONNABORTED') {
+        Alert.alert('Error', 'Request timed out. Please check your internet connection.');
+      } else if (
+        error.response?.status === 401 || 
+        error.response?.data?.code === 'token_not_valid' ||
+        error.response?.data?.detail?.includes('token not valid')
+      ) {
+        await handleUnauthorized();
+        return;
+      } else {
+        Alert.alert("Error", "Failed to load rating options. Please try again.");
+      }
     }
   };
 
