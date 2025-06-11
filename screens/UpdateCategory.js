@@ -202,9 +202,24 @@ export default function UpdateCategory({ route, navigation }) {
   const handleSubmit = async () => {
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      if (!category || !category.outlet_id || !category.menu_cat_id) {
-        console.error("❌ Category details not loaded:", category);
-        Alert.alert("Error", "Please wait for category details to load");
+      const deviceToken = await AsyncStorage.getItem("devicePushToken");
+      const userDataString = await AsyncStorage.getItem('userData');
+
+      if (!deviceToken) {
+        Alert.alert('Error', 'Device token not found');
+        return;
+      }
+
+      if (!userDataString) {
+        Alert.alert('Error', 'User data not found. Please login again.');
+        return;
+      }
+
+      const userData = JSON.parse(userDataString);
+      const userId = userData.user_id;
+
+      if (!userId) {
+        Alert.alert('Error', 'User ID not found. Please login again.');
         return;
       }
 
@@ -218,110 +233,97 @@ export default function UpdateCategory({ route, navigation }) {
       setErrors(newErrors);
 
       if (Object.values(newErrors).some((error) => error)) {
-        Alert.alert("Error", "Please fill in all required fields");
         return;
       }
 
       setLoading(true);
 
+      // Create form data
       const apiFormData = new FormData();
-      // Get user_id from AsyncStorage
-      const userDataString = await AsyncStorage.getItem('userData');
-      if (!userDataString) {
-        Alert.alert('Error', 'User data not found. Please login again.');
-        return;
-      }
-
-      const userData = JSON.parse(userDataString);
-      const userId = userData.user_id;
-
       apiFormData.append("user_id", userId);
       apiFormData.append("outlet_id", String(category.outlet_id));
       apiFormData.append("menu_cat_id", String(category.menu_cat_id));
       apiFormData.append("category_name", formData.category_name.trim());
+      apiFormData.append("device_token", deviceToken);
+      apiFormData.append("app_source", "partner_app");
 
+      // Append image only if it's a new image (not a URL)
       if (formData.image && !formData.image.startsWith("http")) {
         const imageUri = formData.image;
         const filename = imageUri.split("/").pop();
         const match = /\.(\w+)$/.exec(filename);
-        const ext = match ? match[1].toLowerCase() : "jpg";
+        const type = match ? `image/${match[1]}` : "image/jpeg";
 
         apiFormData.append("image", {
-          uri: Platform.OS === "ios" ? imageUri.replace("file://", "") : imageUri,
-          type: `image/${ext === "jpg" ? "jpeg" : ext}`,
-          name: `category_image.${ext}`,
+          uri: imageUri,
+          name: filename || 'image.jpg',
+          type,
         });
       }
 
-      console.log("📤 Sending update request with data:", {
-        outlet_id: category.outlet_id,
-        menu_cat_id: category.menu_cat_id,
+      console.log("Sending update data:", {
+        outlet_id: String(category.outlet_id),
+        menu_cat_id: String(category.menu_cat_id),
         category_name: formData.category_name.trim(),
-        hasNewImage: formData.image && !formData.image.startsWith("http"),
+        image: formData.image ? (formData.image.startsWith("http") ? "Existing image" : "New image attached") : "No image"
       });
 
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
-      if (!deviceToken) {
-        throw new Error('Device token not found');
-      }
-
-      apiFormData.append("device_token", deviceToken);
-
-      const response = await fetch(`${COMMON_BASE_URL}/menu_category_update`, {
-        method: "POST",
-        body: apiFormData,
+      const response = await axios({
+        method: 'PATCH',
+        url: `${COMMON_BASE_URL}/menu_category_update`,
+        data: apiFormData,
         headers: {
-          Accept: "application/json",
-          "Content-Type": "multipart/form-data",
-          Authorization: `Bearer ${token}`,
-          "Device-Token": deviceToken
+          'Content-Type': 'multipart/form-data',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+        timeout: 60000, // 60 seconds timeout
       });
 
-      const responseData = await response.json();
-      console.log("📥 Update response:", responseData);
+      console.log("Update Category Response:", response.data);
 
-      // Check for 401 unauthorized first
-      if (response.status === 401 || 
-          responseData.code === 'token_not_valid' || 
-          (responseData.detail && responseData.detail.includes('token not valid'))) {
+      // V2 API success handling
+      Alert.alert(
+        "Success",
+        response.data.detail || "Category updated successfully",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              if (route.params?.onUpdate) {
+                route.params.onUpdate();
+              }
+              navigation.goBack();
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+
+    } catch (err) {
+      console.error("Update Category Error:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
+      
+      // Check for 401 unauthorized
+      if (
+        err.response?.status === 401 || 
+        err.response?.data?.code === 'token_not_valid' ||
+        err.response?.data?.detail?.includes('token not valid')
+      ) {
         await handleUnauthorized();
         return;
       }
-
-      if (responseData.st === 1) {
-        Alert.alert(
-          "Success",
-          responseData.Msg || "Category updated successfully",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                if (route.params?.onUpdate) {
-                  route.params.onUpdate();
-                }
-                navigation.goBack();
-              },
-            },
-          ]
-        );
-      } else {
-        throw new Error(responseData.Msg || "Failed to update category");
-      }
-    } catch (err) {
-      console.error("❌ Update Category Error:", {
-        message: err.message,
-        details: err,
-      });
       
-      // Check for 401 in error response
-      if (err.response?.status === 401 || 
-          err.response?.data?.code === 'token_not_valid' ||
-          err.response?.data?.detail?.includes('token not valid')) {
-        await handleUnauthorized();
-      } else {
-        Alert.alert("Error", err.message || "Failed to update category");
-      }
+      // V2 API error handling
+      Alert.alert(
+        "Error",
+        err.response?.data?.detail || err.message || "Failed to update category"
+      );
     } finally {
       setLoading(false);
     }
