@@ -101,10 +101,10 @@ export default function OrderDetails({ route, navigation }) {
       const response = await axios.post(
         `${COMMON_BASE_URL}/order_view`,
         {
-          outlet_id: outlet_id,
-          order_id: order_id,
-          order_number: orderNumber,
-          device_token : deviceToken
+          outlet_id: outlet_id.toString(),
+          order_id: order_id.toString(),
+          order_number: orderNumber.toString(),
+          device_token: deviceToken
         },
         {
           headers: {
@@ -113,11 +113,40 @@ export default function OrderDetails({ route, navigation }) {
         }
       );
 
-      if (response.data.st === 1) {
-        setOrderDetails(response.data.lists);
-        setIsServed(response.data.lists.order_details.order_status === "paid");
+      // Since v2 directly returns the data structure without st/msg
+      if (response.data) {
+        const orderData = response.data;
+        
+        // Transform table_number array to string if needed
+        if (Array.isArray(orderData.order_details.table_number)) {
+          orderData.order_details.table_number = orderData.order_details.table_number.join(", ");
+        }
+
+        // Update invoice_url to use ebill_url from the response
+        const invoice_url = orderData.order_details.ebill_url 
+          ? `https://men4u.xyz${orderData.order_details.ebill_url}`
+          : null;
+
+        setOrderDetails({
+          order_details: {
+            ...orderData.order_details,
+            // Ensure all required fields are present with proper formatting
+            final_grand_total: orderData.order_details.final_grand_total || 0,
+            total_bill_amount: orderData.order_details.total_bill_amount || 0,
+            discount_amount: orderData.order_details.discount_amount || 0,
+            special_discount: orderData.order_details.special_discount || 0,
+            charges: orderData.order_details.charges || 0,
+            service_charges_amount: orderData.order_details.service_charges_amount || 0,
+            gst_amount: orderData.order_details.gst_amount || 0,
+            tip: orderData.order_details.tip || 0
+          },
+          menu_details: orderData.menu_details,
+          invoice_url: invoice_url
+        });
+
+        setIsServed(orderData.order_details.order_status === "paid");
       } else {
-        throw new Error(response.data.msg || "Failed to fetch order details");
+        throw new Error("Failed to fetch order details");
       }
     } catch (err) {
       console.error("Error fetching order details:", err);
