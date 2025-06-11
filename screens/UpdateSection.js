@@ -43,7 +43,6 @@ export default function UpdateSection({ route, navigation }) {
   const loadSectionData = async () => {
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
       const userDataStr = await AsyncStorage.getItem("userData");
       const userData = JSON.parse(userDataStr);
       
@@ -54,10 +53,9 @@ export default function UpdateSection({ route, navigation }) {
         method: 'POST',
         url: `${COMMON_BASE_URL}/section_view`,
         data: {
-          outlet_id: restaurantId,
+          outlet_id: parseInt(restaurantId),
           section_id: parseInt(sectionId),
-          device_token:deviceToken,
-          user_id: userData.user_id,
+          user_id: parseInt(userData.user_id),
           app_source: "partner"
         },
         headers: {
@@ -69,10 +67,18 @@ export default function UpdateSection({ route, navigation }) {
 
       console.log('Section View API Response:', response.data);
 
-      if (response.data.st === 1) {
-        setSectionName(response.data.data.section_name);
+      // Handle response with data property
+      if (response.data?.data) {
+        const sectionData = response.data.data;
+        
+        // Validate and set section name
+        if (sectionData.section_name) {
+          setSectionName(sectionData.section_name);
+        } else {
+          throw new Error('Section name not found in response');
+        }
       } else {
-        throw new Error(response.data.Msg || 'Invalid section data received');
+        throw new Error('Invalid response format');
       }
     } catch (error) {
       console.error('Error loading section:', {
@@ -80,17 +86,12 @@ export default function UpdateSection({ route, navigation }) {
         response: error.response?.data
       });
 
-      // Check for 401 unauthorized
-      if (
-        error.response?.status === 401 || 
-        error.response?.data?.code === 'token_not_valid' ||
-        error.response?.data?.detail?.includes('token not valid')
-      ) {
+      if (error.response?.status === 401) {
         await handleUnauthorized();
         return;
       }
 
-      Alert.alert('Error', 'Failed to load section details');
+      Alert.alert('Error', error.message || 'Failed to load section details');
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -100,9 +101,9 @@ export default function UpdateSection({ route, navigation }) {
   const handleUpdate = async () => {
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      const deviceToken = await AsyncStorage.getItem("devicePushToken");
       const userDataStr = await AsyncStorage.getItem("userData");
       const userData = JSON.parse(userDataStr);
+      
       if (!sectionName.trim()) {
         Alert.alert('Error', 'Please enter section name');
         return;
@@ -113,19 +114,18 @@ export default function UpdateSection({ route, navigation }) {
         outlet_id: restaurantId,
         section_id: sectionId,
         section_name: sectionName.trim(),
-        device_token:deviceToken,
         user_id: userData.user_id
       });
 
       const response = await axios({
-        method: 'POST',
+        method: 'PATCH',
         url: `${COMMON_BASE_URL}/section_update`,
         data: {
           outlet_id: parseInt(restaurantId),
           section_id: parseInt(sectionId),
           section_name: sectionName.trim(),
-          device_token:deviceToken,
-          user_id: userData.user_id
+          user_id: parseInt(userData.user_id),
+          app_source: "partner"
         },
         headers: {
           'Accept': 'application/json',
@@ -136,10 +136,11 @@ export default function UpdateSection({ route, navigation }) {
 
       console.log('Section Update API Response:', response.data);
 
-      if (response.data.st === 1) {
+      // Handle new API response format
+      if (response.data?.detail) {
         Alert.alert(
           'Success',
-          response.data.msg || 'Section updated successfully!',
+          response.data.detail,
           [
             {
               text: 'OK',
@@ -154,7 +155,7 @@ export default function UpdateSection({ route, navigation }) {
           ]
         );
       } else {
-        throw new Error(response.data.msg || 'Failed to update section');
+        throw new Error('Failed to update section');
       }
     } catch (error) {
       console.error('Error updating section:', {
@@ -172,7 +173,7 @@ export default function UpdateSection({ route, navigation }) {
         return;
       }
 
-      Alert.alert('Error', error.response?.data?.msg || 'Failed to update section');
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to update section');
     } finally {
       setUpdating(false);
     }
