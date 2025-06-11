@@ -297,16 +297,28 @@ export default function CreateMenu({ route, navigation }) {
           },
         }
       );
-      if (response.data.st === 1) {
-        const ratings = response.data.rating_list;
-        const formattedRatings = Object.entries(ratings).map(
-          ([value, label]) => ({
-            value,
-            label: label.toString(),
-          })
-        );
-        setRatingOptions(formattedRatings);
+
+      console.log('Rating options response:', response.data);
+
+      const { rating_list } = response.data;
+
+      if (!rating_list || typeof rating_list !== 'object') {
+        console.error('Invalid rating_list format:', rating_list);
+        Alert.alert('Error', 'Invalid rating data received');
+        return;
       }
+
+      // Transform the object into array format for picker
+      const formattedRatings = Object.entries(rating_list)
+        .map(([value, label]) => ({
+          value: value,
+          label: label
+        }))
+        .sort((a, b) => parseFloat(a.value) - parseFloat(b.value)); // Sort by numeric value
+
+      console.log('Formatted rating options:', formattedRatings);
+      setRatingOptions(formattedRatings);
+
     } catch (error) {
       console.error("Error loading ratings:", error);
       
@@ -328,7 +340,10 @@ export default function CreateMenu({ route, navigation }) {
         return;
       }
       
-      Alert.alert("Error", "Failed to load rating options");
+      Alert.alert(
+        "Error",
+        error.response?.data?.detail || "Failed to load rating options"
+      );
     }
   };
 
