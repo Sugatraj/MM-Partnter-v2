@@ -41,6 +41,15 @@ export default function UpdateMenu({ route, navigation }) {
     description: "",
     ingredients: "",
     isSpecial: false,
+    portions: [
+      {
+        portion_name: "",
+        price: "",
+        unit_value: "",
+        unit_type: "",
+        flag: 0
+      }
+    ]
   });
 
   const [foodTypes, setFoodTypes] = useState([]);
@@ -166,12 +175,25 @@ export default function UpdateMenu({ route, navigation }) {
 
       if (response.data.st === 1 && response.data.data) {
         const menuData = response.data.data;
-        console.log("Setting form data with rating:", menuData.rating);
+        
+        // Transform portion data to match the new format
+        const portions = menuData.portions?.map(p => ({
+          portion_name: p.portion_name || "",
+          price: p.price?.toString() || "",
+          unit_value: p.unit_value?.toString() || "",
+          unit_type: p.unit_type || "",
+          flag: p.flag || 0
+        })) || [{
+          portion_name: "",
+          price: "",
+          unit_value: "",
+          unit_type: "",
+          flag: 0
+        }];
 
-        setFormData((prevState) => ({
+        setFormData(prevState => ({
+          ...prevState,
           name: menuData.name || "",
-          fullPrice: menuData.full_price?.toString() || "",
-          halfPrice: menuData.half_price?.toString() || "",
           foodType: menuData.food_type || "veg",
           categoryId: menuData.menu_cat_id?.toString() || "",
           spicyIndex: menuData.spicy_index?.toString() || "",
@@ -180,6 +202,7 @@ export default function UpdateMenu({ route, navigation }) {
           description: menuData.description || "",
           ingredients: menuData.ingredients || "",
           isSpecial: menuData.is_special === true,
+          portions: portions
         }));
 
         // Reset both images and newImages when loading menu data
@@ -456,28 +479,47 @@ export default function UpdateMenu({ route, navigation }) {
       const token = await AsyncStorage.getItem("accessToken");
       const deviceToken = await AsyncStorage.getItem("devicePushToken");
       setLoading(true);
-      const formDataToSend = new FormData();
+      const apiFormData = new FormData();
 
       if (!userId) {
         throw new Error("User ID not found");
       }
 
-      // Append basic form fields
-      formDataToSend.append("user_id", userId.toString());
-      formDataToSend.append("menu_id", menuId);
-      formDataToSend.append("outlet_id", restaurantId);
-      formDataToSend.append("name", formData.name.trim());
-      formDataToSend.append("full_price", formData.fullPrice);
-      formDataToSend.append("half_price", formData.halfPrice || "0");
-      formDataToSend.append("food_type", formData.foodType);
-      formDataToSend.append("menu_cat_id", formData.categoryId);
-      formDataToSend.append("spicy_index", formData.spicyIndex ? formData.spicyIndex.toString() : "");
-      formDataToSend.append("offer", formData.offer || "0");
-      formDataToSend.append("rating", formData.rating || "");
-      formDataToSend.append("description", formData.description.trim());
-      formDataToSend.append("ingredients", formData.ingredients.trim());
-      formDataToSend.append("is_special", formData.isSpecial ? "True" : "False");
-      formDataToSend.append("device_token", deviceToken || "");
+      // Basic menu information
+      apiFormData.append("user_id", userId.toString());
+      apiFormData.append("menu_id", menuId.toString());
+      apiFormData.append("outlet_id", restaurantId.toString());
+      apiFormData.append("name", formData.name.trim());
+      apiFormData.append("food_type", formData.foodType);
+      apiFormData.append("menu_cat_id", formData.categoryId);
+      apiFormData.append("description", formData.description.trim());
+      apiFormData.append("spicy_index", formData.spicyIndex ? formData.spicyIndex.toString() : "");
+      apiFormData.append("ingredients", formData.ingredients.trim());
+      apiFormData.append("offer", formData.offer.toString());
+      apiFormData.append("rating", formData.rating.toString());
+      apiFormData.append("app_source", "partner_app");
+      apiFormData.append("device_token", await AsyncStorage.getItem("devicePushToken"));
+
+      // Create portion data array
+      const portionData = formData.portions
+        .filter(portion => portion.portion_name && portion.price && portion.unit_value && portion.unit_type)
+        .map(portion => ({
+          portion_name: portion.portion_name,
+          price: parseFloat(portion.price),
+          unit_value: portion.unit_value,
+          unit_type: portion.unit_type,
+          flag: portion.flag
+        }));
+
+      // Add validation for portions
+      if (portionData.length === 0) {
+        Alert.alert("Error", "At least one portion with complete details is required");
+        setLoading(false);
+        return;
+      }
+
+      // Append portion_data as JSON string
+      apiFormData.append("portion_data", JSON.stringify(portionData));
 
       // Handle new images
       if (newImages.length > 0) {
@@ -486,7 +528,7 @@ export default function UpdateMenu({ route, navigation }) {
           const match = /\.(\w+)$/.exec(filename);
           const type = match ? `image/${match[1]}` : "image/jpeg";
 
-          formDataToSend.append('images', {
+          apiFormData.append('images', {
             uri: imageUri,
             type: type,
             name: filename || `image${index}.jpg`,
@@ -496,31 +538,49 @@ export default function UpdateMenu({ route, navigation }) {
 
       // Handle removed images
       if (removedImageIds.length > 0) {
-        formDataToSend.append('remove_image_flag', 'True');
-        formDataToSend.append('existing_image_ids', JSON.stringify(removedImageIds));
+        apiFormData.append('remove_image_flag', 'True');
+        apiFormData.append('existing_image_ids', JSON.stringify(removedImageIds));
       }
 
       // Send list of remaining existing images
       const remainingImages = images.filter(img => !newImages.includes(img) && !removedImageIds.includes(img.id));
-      formDataToSend.append('existing_images', JSON.stringify(remainingImages));
+      apiFormData.append('existing_images', JSON.stringify(remainingImages));
 
       const response = await axios({
-        method: "POST",
-        url: `${COMMON_BASE_URL}/menu_update`,
-        data: formDataToSend,
+        method: 'POST',
+        url: 'https://men4u.xyz/v2/common/menu_update',
+        data: apiFormData,
         headers: {
-          "Content-Type": "multipart/form-data",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
+        transformRequest: (data, headers) => {
+          return data;
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+        timeout: 60000
       });
 
-      if (response.data.st === 1) {
-        Alert.alert("Success", "Menu updated successfully");
-        navigation.goBack();
-      } else {
-        throw new Error(response.data.msg || "Failed to update menu");
-      }
+      // V2 API success handling
+      Alert.alert(
+        "Success",
+        response.data.detail || "Menu item updated successfully",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              if (route.params?.onUpdate) {
+                route.params.onUpdate();
+              }
+              navigation.goBack();
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+
     } catch (error) {
       console.error("Error updating menu:", error);
       
@@ -804,6 +864,43 @@ export default function UpdateMenu({ route, navigation }) {
             </View>
           </View>
 
+          {/* Portion Details */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Portion Details</Text>
+            {formData.portions.map((portion, index) => (
+              <View key={index} style={styles.portionContainer}>
+                {/* Copy the portion UI components from CreateMenu.js */}
+                {/* ... portion input fields ... */}
+              </View>
+            ))}
+            
+            {formData.portions.length < 3 && (
+              <TouchableOpacity
+                style={styles.addPortionButton}
+                onPress={() => {
+                  if (formData.portions.length < 3) {
+                    setFormData({
+                      ...formData,
+                      portions: [
+                        ...formData.portions,
+                        {
+                          portion_name: "",
+                          price: "",
+                          unit_value: "",
+                          unit_type: "",
+                          flag: formData.portions.length
+                        }
+                      ]
+                    });
+                  }
+                }}
+              >
+                <FontAwesome name="plus" size={16} color="#fff" />
+                <Text style={styles.addPortionButtonText}>Add Portion</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           {/* Submit Button */}
           <TouchableOpacity
             style={[styles.submitButton, loading && styles.submitButtonDisabled]}
@@ -945,5 +1042,48 @@ const styles = StyleSheet.create({
   },
   submitButtonDisabled: {
     opacity: 0.7,
-  }
+  },
+  portionContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  portionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  portionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#495057',
+  },
+  removePortionButton: {
+    padding: 5,
+  },
+  addPortionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#67B279',
+    padding: 12,
+    borderRadius: 5,
+    marginTop: 10,
+  },
+  addPortionButtonText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#333',
+  },
 });
