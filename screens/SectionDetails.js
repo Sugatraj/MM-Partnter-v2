@@ -65,7 +65,8 @@ export default function SectionDetails({ route, navigation }) {
           outlet_id: route.params.restaurantId,
           section_id: parseInt(sectionId),
           app_source: "partner_app",
-          user_id: parsedUserData.user_id
+          user_id: parsedUserData.user_id,
+          app_source: "partner_app"
         },
         headers: {
           'Accept': 'application/json',
@@ -195,7 +196,8 @@ export default function SectionDetails({ route, navigation }) {
           outlet_id: parseInt(restaurantId),
           section_id: parseInt(sectionId),
           device_token: deviceToken,
-          user_id: userData.user_id
+          user_id: userData.user_id,
+          app_source: "partner_app"
         },
         headers: {
           Accept: "application/json",
