@@ -46,42 +46,17 @@ export default function DashboardScreen() {
 
   // Load fresh data when component mounts and when screen comes into focus
   useEffect(() => {
-    // loadCounts();
     loadTokens();
+    fetchPartnerDetails();
     refreshRestaurants();
   }, []);
 
   useFocusEffect(
     React.useCallback(() => {
-      // loadCounts();
+      fetchPartnerDetails();
       refreshRestaurants();
     }, [])
   );
-
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        const storedData = await AsyncStorage.getItem("userData");
-        const parsedData = JSON.parse(storedData);
-        console.log("Retrieved userData:", parsedData);
-        setUserData(parsedData);
-      } catch (error) {
-        console.error("Error loading userData:", error);
-      }
-    };
-    loadUserData();
-  }, []);
-
-  // useEffect(() => {
-  //   const checkUpdates = async () => {
-  //     if (!__DEV__) {
-  //       await checkForUpdates(true); // Pass true to make the check silent
-  //     }
-  //   };
-    
-  //   // Check for updates when dashboard loads
-  //   checkUpdates();
-  // }, []);
 
   const loadTokens = async () => {
     try {
@@ -307,6 +282,47 @@ export default function DashboardScreen() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPartnerDetails = async () => {
+    try {
+      // Get the access token and user ID from AsyncStorage
+      const userData = await AsyncStorage.getItem('userData');
+      const parsedUserData = JSON.parse(userData);
+      const accessToken = parsedUserData?.access_token;
+      const userId = parsedUserData?.user_id;
+
+      if (!accessToken || !userId) {
+        throw new Error('Access token or user ID not found');
+      }
+
+      // Make the API call with authorization header
+      const response = await axiosInstance.get(
+        `${PARTNER_BASE_URL}/partner_details/${userId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+      
+      console.log("Partner Details API Response:", response.data);
+
+      if (response.data.details) {
+        // Update the userData state with the new details
+        setUserData(response.data.details);
+      } else {
+        setError("No partner details found");
+      }
+    } catch (err) {
+      console.error("API Error:", err);
+      if (err.response?.status === 401) {
+        await handleUnauthorized();
+      } else {
+        setError(err.message || "Failed to load partner details");
+      }
     }
   };
 
