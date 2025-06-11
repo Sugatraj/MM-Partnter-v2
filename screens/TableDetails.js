@@ -125,21 +125,24 @@ export default function TableDetails({ route, navigation }) {
           onPress: async () => {
             try {
               const token = await AsyncStorage.getItem("accessToken");
-              const deviceToken = await AsyncStorage.getItem("devicePushToken");
               const userData = await AsyncStorage.getItem("userData");
               const parsedUserData = JSON.parse(userData);
+
+              if (!parsedUserData?.user_id) {
+                throw new Error("User ID not found");
+              }
+
               console.log('Attempting to delete table:', { tableId, restaurantId });
 
               const response = await axios({
-                method: "POST",
+                method: "DELETE",
                 url: `${COMMON_BASE_URL}/table_delete`,
                 data: {
                   table_id: parseInt(tableId),
                   outlet_id: parseInt(restaurantId),
                   section_id: parseInt(sectionId),
-                  device_token:deviceToken,
-                  user_id: parsedUserData?.user_id
-
+                  user_id: parsedUserData.user_id,
+                  app_source: "partner_app"
                 },
                 headers: {
                   Accept: "application/json",
@@ -150,10 +153,11 @@ export default function TableDetails({ route, navigation }) {
 
               console.log('Delete table response:', response.data);
 
-              if (response.data.st === 1) {
+              // V2 API success response handling
+              if (response.status === 200) {
                 Alert.alert(
                   'Success',
-                  'Table deleted successfully',
+                  response.data.detail || 'Table deleted successfully',
                   [
                     {
                       text: 'OK',
@@ -167,8 +171,6 @@ export default function TableDetails({ route, navigation }) {
                     }
                   ]
                 );
-              } else {
-                throw new Error(response.data.Msg || 'Failed to delete table');
               }
             } catch (error) {
               console.error('Error deleting table:', {
@@ -186,7 +188,9 @@ export default function TableDetails({ route, navigation }) {
                 return;
               }
 
-              Alert.alert('Error', error.response?.data?.Msg || 'Failed to delete table');
+              // Handle specific error messages from V2 API
+              const errorMessage = error.response?.data?.detail || 'Failed to delete table';
+              Alert.alert('Error', errorMessage);
             }
           },
         },
