@@ -142,15 +142,18 @@ export default function VerifyOTPScreen({ route, navigation }) {
         }
       );
 
-      if (response.data.st === 1) {
+      // Check if response has detail and role matches
+      if (response.data.detail && response.data.role === "partner") {
         setResendTimer(15);
-        Alert.alert("Success", response.data.msg || "OTP resent successfully");
+        Alert.alert("Success", response.data.detail);
       } else {
-        Alert.alert("Error", response.data.msg || "Failed to resend OTP");
+        Alert.alert("Error", "Invalid response from server");
       }
     } catch (error) {
       console.error('Resend OTP Error:', error);
-      Alert.alert("Error", "Failed to resend OTP. Please try again.");
+      // Handle error response with detail field
+      const errorMessage = error.response?.data?.detail || "Failed to resend OTP. Please try again.";
+      Alert.alert("Error", errorMessage);
     }
   };
 
